@@ -1,0 +1,60 @@
+This is a collection of tools for users of the MobileSheetsPro, the
+Android Music Reader.
+
+WARNING: THIS IS 'WORK IN PROGRESS' AND 'WORKS FOR ME'. I CANNOT GIVE
+ANY GUARANTEE THAT IT WILL WORK FOR YOU.
+
+Requirements:
+
+ * A system with a command line tool, e.g. Linux Shell, Windows
+   Command.
+ * Perl 5.10 or newer.
+ * Perl modules for DBI, SQLite, PDF::API2.
+ * Experience with running command line tools (yes, really).
+
+Tools:
+
+msb_unpack.pl
+
+This tool unpacks a MSPro backup set into the current directory.
+
+Usage:
+
+  Copy the backup set from the tablet onto the PC.
+
+  perl msb_unpack.pl MobileSheetsProBackup.msb
+
+  (Note: You may need to adjust the path to perl, the script and the
+  backup set if they are not accessible from the current directory.)
+
+  The contents of the backup set will be extracted. All files will be
+  extracted into the current directory, folder information will not be
+  included. 
+
+
+flatten.pl
+
+This tool processes an unpacked MSPRo backup set and creates PDF files
+that include the MSPro annotations.
+
+Usage:
+
+  Unpack the backup set into the current directory.
+
+  perl flatten.pl
+
+  (Note: You may need to adjust the path to perl and the script if
+  they are not accessible from the current directory.)
+
+  PDF documents are created for each file that has annotations. For
+  PDF sources the original document is included, so the new PDF
+  document contains the original plus the annotations. For other
+  source files, the PDF document will contain empty pages containing
+  the annotations.
+
+  Supported annotations:
+
+  - drawing annotations (line, rectangle, circle, free)
+  - text annotations, but no fancy font stuff
+
+WARNING: See WARNING above.
