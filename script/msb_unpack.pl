@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun May 31 11:35:42 2015
-# Update Count    : 91
+# Last Modified On: Sun May 31 20:54:05 2015
+# Update Count    : 118
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -51,22 +51,44 @@ use Fcntl qw( SEEK_CUR O_RDONLY O_WRONLY O_CREAT );
 use DBI;
 use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
 
+# MSB File Format, as told by Mike.
+#
+# 499602d4         file magic word (version 3) 1234567892
+# xxxxxxxxxxxxxxxx 8-byte data length
+# xxxxxxxxxxxxxxxx database file data
+#
+# Followed by zero or more:
+#
+# 11deda2c5161659c 8-byte header magic word 1287706427353294236
+#                  (can be used for searching in a corrupt file)
+# xxxxxxxxxxxxxxxx 8-byte song database Id
+# xxxxxxxxxxxxxxxx 8-byte data length ( 0 = missing or dup )
+# xxxxxxxxxxxxxxxx file data
+#                  order: image/PDF/text/audio
+#
+# Finally:
+#
+# ffffffffffffffff 8-byte end-of-file sentinel
+#
+# Note: Everything is byte aligned.
+
+my $FILE_MAGIC   = 1234567892;
+my $HDR_MAGIC    = 1287706427353294236;
+my $EOF_SENTINEL = "\xff" x 8;
+
 sysopen( my $fd, $msbfile, O_RDONLY, 0 )
   or die("$msbfile: $!\n");
 
 my $buf;
-my $len;
-my $eof_sentinel = "\xff" x 8;
+my $len = sysread( $fd, $buf, 4 );
+die("Not a valid MSPro backup file\n")
+  unless $len == 4 && unpack( "N", $buf) == $FILE_MAGIC;
 
-# First 12 bytes
-# 4996 02d4 0000 0000 0005 b000
-# last 4 bytes are the length, in network byte order.
+# First entry in the file is the database.
 
-( $buf, $len ) = readbytes(12);
+$len = read8();
 my $file = 0;
 warn( "file $file, length = $len\n" ) if $debug;
-
-# First file is the database.
 my $path = "mobilesheets.db";
 
 # For database date.
@@ -102,6 +124,7 @@ for ( ;; ) {
 	# versions are in the backup, the first with the length of the
 	# second and the second with a length of zero.
 	warn("File $file, size mismatch $sz <> $len\n") unless $sz == $len;
+	# Mike: This is how I dealt with dups and missing files.
     }
 
     if ( $zip && $file ) {
@@ -141,28 +164,12 @@ for ( ;; ) {
 	};
     }
 
-    # Next 'header'. Contents not yet understood.
-    # Bytes 0 .. 3: 11 de da 2c (so far)
-    # Bytes 4 .. 7: 51 61 65 9c (so far)
-    # Bytes 8 .. 11: zeroes (assumingly to distinguish from 'file' headers)
-    ( $buf, $len ) = readbytes(12);
-    warn( sprintf( "length = $len, %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-	  map { ord } split( //, $buf ) ) ) if $debug;
+    die("Corrupted data -- header magic not found\n")
+      unless read8() == $HDR_MAGIC;
 
-    # Next 'header' ('file' header?)
-    # Bytes 0 .. 3:  file number
-    # Bytes 4 .. 7:  zeroes (so far).
-    # Bytes 8 .. 11: the length of the data
-    ( $buf, $len ) = readbytes(12);
-    $file = unpack( "N", substr( $buf, 0, 4 ) );
-    my $rest = substr( $buf, 4, 4 );
-    if ( $rest eq "\0\0\0\0" ) {
-	warn("file = $file, length = $len\n") if $debug;
-    }
-    else {
-	warn( sprintf( "file = $file, length = $len, rest = %02x %02x %02x %02x\n",
-		       map { ord } split( //, $rest ) ) );
-    }
+    $file = read8();		# database song id
+    $len = read8();
+    warn("file = $file, length = $len\n") if $debug;
 
     # Next iteration will copy the contents.
 }
@@ -177,20 +184,19 @@ END {
 
 ################ Subroutines ################
 
-sub readbytes {
-    my ( $cnt ) = @_;
+sub read8 {
     my $buf;
-    my $n = sysread( $fd, $buf, $cnt );
+    my $n = sysread( $fd, $buf, 8 );
 
-    if ( $n eq length($eof_sentinel) && $buf eq $eof_sentinel ) {
+    if ( $n eq length($EOF_SENTINEL) && $buf eq $EOF_SENTINEL ) {
 	warn("EOF\n") if $debug;
 	exit;
     }
-    if ( $n < $cnt ) {
-	warn("short read: $n bytes instead of $cnt\n");
+    if ( $n < 8 ) {
+	warn("short read: $n bytes instead of 8\n");
     }
-    my $length = unpack( "N", substr( $buf, -4 ) );
-    wantarray ? ( $buf, $length ) : $buf;
+    my @a = unpack( "NN", $buf );
+    $a[0] << 32 | $a[1];
 }
 
 ################ Subroutines ################
