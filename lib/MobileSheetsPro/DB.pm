@@ -123,12 +123,12 @@ sub db_upd {
 	scalar(@$fields) . " fields, " . scalar(@$values) . " values\n" )
       unless @$fields == @$values;
 
-    my @keys = splice( @$fields, 0, $nkey-1 );
+    my @keys = splice( @$fields, 0, $nkey );
     my $sql = "UPDATE $table SET " .
       join( ", ", map { "$_ = ?" } @$fields ) .
 	" WHERE $keys[0] = ?";
     $sql .= " AND ".$keys[$_]." = ?" for 1..$nkey-1;
-    push( @$values, splice( @$values, 0, $nkey-1 ) );
+    push( @$values, splice( @$values, 0, $nkey ) );
     info( $sql, @$values ) if $trace;
     if ( $dbh->do( $sql, {}, @$values ) < 1 ) {
 	info( $sql, @$values ) unless $trace;
@@ -154,8 +154,8 @@ sub db_insupd {
 
     if ( defined $ret->[0] ) {
 	$id = $ret->[0];
-	splice( @$fields, 0, $nkey-1 );
-	splice( @$values, 0, $nkey-1 );
+	splice( @$fields, 0, $nkey );
+	splice( @$values, 0, $nkey );
 	$sql = "UPDATE $table SET " .
 	  join( ", ", map { "$_ = ?" } @$fields ) .
 	    " WHERE Id = ?";
