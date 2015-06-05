@@ -22,7 +22,7 @@ Usage:
 
   Copy the backup set from the tablet onto the PC.
 
-  perl msb_unpack.pl MobileSheetsProBackup.msb
+  perl script/msb_unpack.pl MobileSheetsProBackup.msb
 
   (Note: You may need to adjust the path to perl, the script and the
   backup set if they are not accessible from the current directory.)
@@ -41,7 +41,7 @@ Usage:
 
   Unpack the backup set into the current directory.
 
-  perl flatten.pl
+  perl script/flatten.pl
 
   (Note: You may need to adjust the path to perl and the script if
   they are not accessible from the current directory.)
