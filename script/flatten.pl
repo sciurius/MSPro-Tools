@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun May 31 11:35:50 2015
-# Update Count    : 252
+# Last Modified On: Fri Jun  5 09:48:26 2015
+# Update Count    : 260
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -49,7 +49,7 @@ my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 ################ The Process ################
 
 use MobileSheetsPro::DB;
-use MobileSheetsPro::Annotations;
+use MobileSheetsPro::Annotations::PDF;
 
 db_open( $dbname, { RaiseError => 1, Trace => $trace } );
 
@@ -79,18 +79,21 @@ foreach ( @$r ) {
 	}
     }
 
-    die("No source for song $songid\n") unless -s $songpdf;
     unless ( $newpdf ) {
 	$newpdf = $songpdf;
 	$newpdf =~ s/\.([^.]+)$/_$1/;
 	$newpdf .= ".pdf";
     }
-    warn("Flattening \"$songpdf\" into \"$newpdf\" ...\n");
+    warn("Flattening [$songid] \"$songpdf\" into \"$newpdf\" ...\n");
+    unless ( -s $songpdf ) {
+	warn("No source for [$songid] \"$songpdf\"\n");
+	undef $songpdf;
+    }
+    else {
+	undef $songpdf unless $songpdf =~ /\.pdf$/i;
+    }
 
-    MobileSheetsPro::Annotations::flatten_song( dbh,
-						$songid,
-						$songpdf =~ /\.pdf$/i ? $songpdf : undef,
-						$newpdf );
+    flatten_song( dbh, $songid, $songpdf, $newpdf );
     undef $songpdf;
     undef $newpdf;
 }

@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun May 31 10:51:02 2015
-# Update Count    : 235
+# Last Modified On: Thu Jun  4 13:29:46 2015
+# Update Count    : 240
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -12,11 +12,15 @@
 use strict;
 use warnings;
 
-package MobileSheetsPro::Annotations;
+package MobileSheetsPro::Annotations::PDF;
 
 use MobileSheetsPro::DB;
 use Data::Dumper;
 use PDF::API2;
+
+use base qw(Exporter);
+our @EXPORT = qw( flatten_song );
+our @EXPORT_OK = @EXPORT;
 
 my $verbose = 0;
 my $debug = 0;
