@@ -15,7 +15,7 @@ my $trace = 0;
 
 our @EXPORT= qw( dbh db_open db_ins db_upd db_insupd
 		 get_sourcetype get_genre get_collections get_key
-		 get_tempo get_time get_artist get_composer
+		 get_tempo get_signature get_artist get_composer
 		 get_encoding );
 
 use base qw(Exporter);
@@ -65,6 +65,11 @@ sub get_artist {
 my %composer;
 sub get_composer {
     $composer{$_[0]} //= get__id( "Composer", "Name", $_[0] );
+}
+
+my %signature;
+sub get_signature {
+    $signature{$_[0]} //= get__id( "Signature", "Name", $_[0] );
 }
 
 sub get_encoding {
