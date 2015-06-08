@@ -33,10 +33,7 @@ sub dbh {
 }
 
 my %sourcetype;
-my @sourcetype;
 sub get_sourcetype {
-    if ( $_[0] =~ /^\d+$/ ) {
-    }
     $sourcetype{$_[0]} //= get__id( "SourceType", "Type", $_[0] );
 }
 
