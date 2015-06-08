@@ -1,5 +1,5 @@
 -- Schema for MobileSheetsPro database.
--- Version: MobileSheetsPro 1.1.5.
+-- Version: MobileSheetsPro 1.0.7
 
 PRAGMA foreign_keys=OFF;
 
@@ -124,7 +124,7 @@ CREATE TABLE Files
  );
 CREATE INDEX files_song_id_idx ON Files(SongId);
 
--- **UNUSED** Books.
+-- Albums. Books is the legacy name.
 -- Table BookSongs maintains an N-N relationship with Songs.
 
 CREATE TABLE Books
@@ -524,9 +524,11 @@ CREATE TABLE AnnotationsBase
    Type INTEGER,		-- type of annotation
 				-- 0 = text
 				-- 1 = draw
-				-- ...
+				-- 2 = highlight
    GroupNum INTEGER,
-   Alpha INTEGER,
+   Alpha INTEGER,		--   0 = transparent
+   	 			--  80 = typical highlight
+   	 			-- 255 = opaque
    Zoom FLOAT,
    ZoomY FLOAT,
    Version INTEGER
