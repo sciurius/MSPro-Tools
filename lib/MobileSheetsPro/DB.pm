@@ -8,12 +8,12 @@ package MobileSheetsPro::DB;
 
 use DBI;
 
-our $VERSION = "0.02";
+our $VERSION = "0.03";
 
 my $dbh;
 my $trace = 0;
 
-our @EXPORT= qw( dbh db_open db_ins db_upd db_insupd
+our @EXPORT= qw( dbh db_open db_ins db_upd db_insupd lookup
 		 get_sourcetype get_genre get_collections get_key
 		 get_tempo get_signature get_artist get_composer
 		 get_encoding );
@@ -33,7 +33,10 @@ sub dbh {
 }
 
 my %sourcetype;
+my @sourcetype;
 sub get_sourcetype {
+    if ( $_[0] =~ /^\d+$/ ) {
+    }
     $sourcetype{$_[0]} //= get__id( "SourceType", "Type", $_[0] );
 }
 
@@ -79,6 +82,17 @@ sub get_encoding {
 	return 0 if /^utf-?8$/i;
     }
     return 0;
+}
+
+sub lookup {
+    my ( $table, $name, $id ) = @_;
+    my $sql = "SELECT $name FROM $table WHERE Id = ?";
+    my $ret = $dbh->selectrow_arrayref( $sql, {}, $id );
+    if ( defined $ret->[0] ) {
+	info( "$sql => ?", $id, $ret->[0] ) if $trace;
+	return $ret->[0];
+    }
+    return;
 }
 
 sub get__id {
