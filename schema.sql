@@ -119,7 +119,10 @@ CREATE TABLE Files
    FileSize INTEGER,
    LastModified INTEGER,
    Source INTEGER,
-   Type INTEGER,
+   Type INTEGER,		-- 0 = image
+   				-- 1 = PDF
+				-- 2 = 
+				-- 3 = ChordPro
    Password VARCHAR(255) DEFAULT ''
  );
 CREATE INDEX files_song_id_idx ON Files(SongId);

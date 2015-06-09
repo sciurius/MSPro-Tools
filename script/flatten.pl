@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun  5 09:48:26 2015
-# Update Count    : 260
+# Last Modified On: Tue Jun  9 17:25:12 2015
+# Update Count    : 263
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -18,7 +18,7 @@ use lib "$FindBin::Bin/../lib";
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( flatten 0.10 );
+my ($my_name, $my_version) = qw( flatten 0.11 );
 
 ################ Command line parameters ################
 
@@ -27,7 +27,7 @@ use Getopt::Long 2.13;
 # Command line options.
 my $dbname = "mobilesheets.db";
 my $songid;
-my $songpdf;
+my $songsrc;
 my $newpdf;
 my $verbose = 0;		# verbose processing
 
@@ -70,31 +70,31 @@ foreach ( @$r ) {
     $songid = $_->[0];
     next if $seen{$songid}++;
 
-    unless ( $songpdf ) {
+    unless ( $songsrc ) {
 	my $r = dbh->selectall_arrayref( "SELECT Path from Files WHERE SongId = ?",
 					 {}, $songid );
 	if ( $r && $r->[0] ) {
-	    $songpdf = $r->[0]->[0];
-	    $songpdf =~ s;^.*/;;;
+	    $songsrc = $r->[0]->[0];
+	    $songsrc =~ s;^.*/;;;
 	}
     }
 
     unless ( $newpdf ) {
-	$newpdf = $songpdf;
+	$newpdf = $songsrc;
 	$newpdf =~ s/\.([^.]+)$/_$1/;
 	$newpdf .= ".pdf";
     }
-    warn("Flattening [$songid] \"$songpdf\" into \"$newpdf\" ...\n");
-    unless ( -s $songpdf ) {
-	warn("No source for [$songid] \"$songpdf\"\n");
-	undef $songpdf;
+    warn("Flattening [$songid] \"$songsrc\" into \"$newpdf\" ...\n");
+    unless ( -s $songsrc ) {
+	warn("No source for [$songid] \"$songsrc\"\n");
+	undef $songsrc;
     }
     else {
-	undef $songpdf unless $songpdf =~ /\.pdf$/i;
+	undef $songsrc unless $songsrc =~ /\.(pdf|jpe?g)$/i;
     }
 
-    flatten_song( dbh, $songid, $songpdf, $newpdf );
-    undef $songpdf;
+    flatten_song( dbh, $songid, $songsrc, $newpdf );
+    undef $songsrc;
     undef $newpdf;
 }
 
@@ -117,7 +117,7 @@ sub app_options {
 	GetOptions('ident'	=> \$ident,
 		   'db=s',	=> \$dbname,
 		   'song=i'	=> \$songid,
-		   'songpdf=s'	=> \$songpdf,
+		   'songsrc|songpdf=s'	=> \$songsrc,
 		   'output=s'	=> \$newpdf,
 		   'verbose'	=> \$verbose,
 		   'trace'	=> \$trace,
@@ -149,7 +149,7 @@ flatten [options]
 
  Options:
    --songid=NN		selects a single song by number
-   --songpdf=XXX	explicitly specifies a source PDF
+   --songsrc=XXX	explicitly specifies a source document
    --output=XXX		explicitly specifies the output PDF
    --db=XXX		the MSPro database (default mobilesheets.db)
    --ident		show identification
@@ -168,9 +168,12 @@ unpacking the backup set in verbose mode (see msb_unpack).
 
 If no songid is specified, all songs with annotations are processed.
 
-=item B<--songpdf=>I<XXX>
+=item B<--songsrc=>I<XXX>
 
-Specifies the name of the source PDF, overriding the default.
+Specifies the name of the source document, overriding the default.
+
+Currently supported document types are PDF and JPG. Note that the
+document type is determined by file name extension.
 
 Use with B<--songid>.
 

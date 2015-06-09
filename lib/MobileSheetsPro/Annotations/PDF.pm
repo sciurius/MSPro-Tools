@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun  9 14:53:12 2015
-# Update Count    : 443
+# Last Modified On: Tue Jun  9 17:21:16 2015
+# Update Count    : 456
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -46,7 +46,7 @@ use constant {
 };
 
 sub flatten_song {
-    my ( $dbh, $songid, $pdfsrc, $pdfdst ) = @_;
+    my ( $dbh, $songid, $songsrc, $pdfdst ) = @_;
 
     my $sth;
     my $r;
@@ -56,9 +56,17 @@ sub flatten_song {
     warn("Processing song \"$title\"\n") if $verbose;
 
     my $pdf;
-    if ( $pdfsrc ) {
-	warn("Song file \"$pdfsrc\"\n") if $verbose;
-	$pdf = PDF::API2->open($pdfsrc);
+    if ( $songsrc && $songsrc =~ /\.pdf$/ ) {
+	warn("Song file \"$songsrc\"\n") if $verbose;
+	$pdf = PDF::API2->open($songsrc);
+    }
+    elsif ( $songsrc && $songsrc =~ /\.jpe?g$/ ) {
+	warn("Song file \"$songsrc\"\n") if $verbose;
+	$pdf = PDF::API2->new;
+	my $jpg = $pdf->image_jpeg($songsrc);
+	my $page = $pdf->page;
+	$page->mediabox( 0, 0, DPI_SCALE * $jpg->width, DPI_SCALE * $jpg->height );
+	$page->gfx->image( $jpg, 0, 0, DPI_SCALE  );
     }
     else {
 	$pdf = PDF::API2->new;
@@ -86,7 +94,7 @@ sub flatten_song {
     while ( $sth->fetch ) {
 
 	if ( $curpage != $pageno ) {
-	    if ( $pdfsrc ) {
+	    if ( $songsrc ) {
 		$page = $pdf->openpage( $pageno + 1 );
 	    }
 	    else {
