@@ -525,6 +525,7 @@ CREATE TABLE AnnotationsBase
 				-- 0 = text
 				-- 1 = draw
 				-- 2 = highlight
+				-- 3 = stamp
    GroupNum INTEGER,
    Alpha INTEGER,		--   0 = transparent
    	 			--  80 = typical highlight
