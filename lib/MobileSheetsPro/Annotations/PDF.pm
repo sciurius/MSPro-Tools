@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun  9 13:05:25 2015
-# Update Count    : 439
+# Last Modified On: Tue Jun  9 14:53:12 2015
+# Update Count    : 443
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -39,6 +39,10 @@ use constant {
     DRAWMODE_RECTANGLE  => 1,
     DRAWMODE_CIRCLE     => 2,
     DRAWMODE_FREEHAND   => 3,
+};
+
+use constant {
+    DPI_SCALE => 72/160,	# map Android screen resolution to PDF points
 };
 
 sub flatten_song {
@@ -79,9 +83,6 @@ sub flatten_song {
     # Media box of current page.
     my @mb;
 
-    # Magic value. Haven't found out where it comes from, but it does, indeed, magic.
-    my $MAGIC = 0.44974402082622;
-
     while ( $sth->fetch ) {
 
 	if ( $curpage != $pageno ) {
@@ -101,8 +102,8 @@ sub flatten_song {
 	# Coordinate transformations.
 	# Since the transformations work different for text and graphics, we keep
 	# all annotations in separate containers.
-	my $mx = $MAGIC / $zoomx;
-	my $my = $MAGIC / $zoomy;
+	my $mx = DPI_SCALE / $zoomx;
+	my $my = DPI_SCALE / $zoomy;
 	my $tr = sub {
 	    my ( $g, $t1, $t2, $s1, $s2 ) = @_;
 	    $t1 += $mb[0];
