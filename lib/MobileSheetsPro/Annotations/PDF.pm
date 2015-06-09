@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Jun  4 13:29:46 2015
-# Update Count    : 240
+# Last Modified On: Tue Jun  9 13:05:25 2015
+# Update Count    : 439
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -22,8 +22,24 @@ use base qw(Exporter);
 our @EXPORT = qw( flatten_song );
 our @EXPORT_OK = @EXPORT;
 
-my $verbose = 0;
-my $debug = 0;
+my $verbose = 1;
+my $debug = 1;
+
+# Draw types.
+use constant {
+    DRAWTYPE_TEXT	=> 0,
+    DRAWTYPE_PEN	=> 1,
+    DRAWTYPE_HIGHLIGHT  => 2,
+    DRAWTYPE_STAMP      => 3,
+};
+
+# Draw modes.
+use constant {
+    DRAWMODE_LINE	=> 0,
+    DRAWMODE_RECTANGLE  => 1,
+    DRAWMODE_CIRCLE     => 2,
+    DRAWMODE_FREEHAND   => 3,
+};
 
 sub flatten_song {
     my ( $dbh, $songid, $pdfsrc, $pdfdst ) = @_;
@@ -31,15 +47,13 @@ sub flatten_song {
     my $sth;
     my $r;
 
-    $r = $dbh->selectrow_arrayref( "SELECT Title FROM Songs WHERE Id = $songid" );
-    die("Unknown song $songid\n")
-      unless $r && $r->[0];
-
-    warn("Processing song \"$r->[0]\"\n") if $verbose;
+    my $title = lookup( qw( Songs Title ), $songid );
+    die("Unknown song $songid\n") unless $title;
+    warn("Processing song \"$title\"\n") if $verbose;
 
     my $pdf;
     if ( $pdfsrc ) {
-	warn("Song file \"$r->[0]\"\n") if $verbose;
+	warn("Song file \"$pdfsrc\"\n") if $verbose;
 	$pdf = PDF::API2->open($pdfsrc);
     }
     else {
@@ -47,19 +61,26 @@ sub flatten_song {
     }
     my $font ||= $pdf->ttfont( $ENV{HOME}."/.fonts/DejaVuSans.ttf" );
 
-    $sth = $dbh->prepare( "SELECT Id, Page, Type, GroupNum, Alpha, Zoom, ZoomY, Version FROM AnnotationsBase" .
-			 " WHERE SongId = ? ORDER BY Page, Id" );
+    $sth = $dbh->prepare( "SELECT Id, Page, Type, GroupNum, Alpha,".
+			  " Zoom, ZoomY, Version".
+			  " FROM AnnotationsBase".
+			  " WHERE SongId = ?".
+			  "ORDER BY Page, Id" );
 
-    $sth->bind_columns( \my ( $annid, $pageno, $type, $groupnum, $alpha, $zoomx, $zoomy, $version ) );
+    $sth->bind_columns( \my ( $annid, $pageno, $type, $groupnum,
+			      $alpha, $zoomx, $zoomy, $version ) );
 
     $sth->execute($songid);
 
+    # Page being processed.
+    my $page;
     my $curpage = -1;
 
-    my $page;
-    my $gfx;
-    my $text;
+    # Media box of current page.
     my @mb;
+
+    # Magic value. Haven't found out where it comes from, but it does, indeed, magic.
+    my $MAGIC = 0.44974402082622;
 
     while ( $sth->fetch ) {
 
@@ -73,162 +94,256 @@ sub flatten_song {
 	    }
 	    @mb = $page->get_mediabox; # A4 = 595 x 842
 	    $curpage = $pageno;
-	    $text = $page->text;
-	    $gfx = $page->gfx;
-	    $gfx->translate( 0, $mb[3]-$mb[1] );
+	    warn( sprintf( "page $curpage, mediabox %.3f %.3f %.3f %.3f\n", @mb ) )
+	      if $debug;
 	}
 
-	$gfx->save;
-	$text = $gfx;
-	#$page->grid;
-	my $MAGIC = 0.44974402082622;
-	$gfx->scale( $MAGIC/$zoomx, $MAGIC/$zoomy ); #### MAGIC
+	# Coordinate transformations.
+	# Since the transformations work different for text and graphics, we keep
+	# all annotations in separate containers.
+	my $mx = $MAGIC / $zoomx;
+	my $my = $MAGIC / $zoomy;
+	my $tr = sub {
+	    my ( $g, $t1, $t2, $s1, $s2 ) = @_;
+	    $t1 += $mb[0];
+	    $t2 += $mb[3];
+	    $s1 *= $mx;
+	    $s2 *= $my;
+	    warn( sprintf("xlat %.2f %.2f scale %.2f %.2f\n", $t1, $t2, $s1, $s2) )
+	      if $debug;
+	    $g->transform( -translate => [ $t1, $t2 ], -scale => [ $s1, $s2 ] );
+	};
 
-	if ( $type == 0 ) {	# text
-	    my $sth2 = $dbh->prepare( "SELECT TextColor,Text,FontFamily,FontSize,FontStyle," .
+	#### Text annotations ####
+
+	if ( $type == DRAWTYPE_TEXT ) {
+
+	    my $sth = $dbh->prepare( "SELECT TextColor,Text,FontFamily,FontSize,FontStyle," .
 				     "FillColor,BorderColor,TextAlign," .
 				     "HasBorder,BorderWidth,AutoSize,Density" .
 				     " FROM TextboxAnnotations" .
-				     " WHERE BaseId = $annid ORDER BY Id" );
-	    $sth2->bind_columns( \my ( $textcolor, $thetext, $fontfamily, $fontsize, $fontstyle,
-				       $fillcolor, $bordercolor, $textalign,
-				       $hasborder, $borderwidth, $autosize, $density ) );
-	    my $r = get_path( $dbh, $annid );
-	    $sth2->execute;
-	    while ( $sth2->fetch ) {
-		my $text = $page->text;
-		$text->font($font, $fontsize);
-		$text->fillcolor( make_colour($textcolor) );
-		$text->strokecolor( make_colour($textcolor) );
-		# I don't understand, but it works.
-		$text->transform( -translate => [ $r->[4] * ($MAGIC/$zoomx), (0-$r->[5]) * ($MAGIC/$zoomy) ],
-				  -scale => [ $MAGIC/$zoomx, $MAGIC/$zoomy ],
-				); #### MAGIC
-		if ( $textalign == 1 ) {
-		    $text->text_center($thetext);
+				     " WHERE BaseId = $annid" );
+	    $sth->execute;
+	    my $r = $sth->fetchall_arrayref;
+	    warn( "Expecting a single result for annotation $annid, not ",
+		  scalar(@$r), "\n" ) unless @$r == 1;
+
+	    my ( $textcolor, $thetext, $fontfamily, $fontsize, $fontstyle,
+		 $fillcolor, $bordercolor, $textalign,
+		 $hasborder, $borderwidth, $autosize, $density ) = @{ $r->[0] };
+
+	    $r = get_path( $dbh, $annid );
+
+	    if ( $hasborder || $fillcolor ) {
+		my $gfx = $page->gfx;
+		$gfx->save;
+		$tr->( $gfx, 0, 0, 1, -1 );
+		$gfx->strokecolor( make_colour($bordercolor) );
+		$gfx->fillcolor(   make_colour($fillcolor) ) if $fillcolor;
+		$gfx->linewidth($borderwidth);
+
+		warn( sprintf( "page $curpage, rect %.2f %.2f %.2f %.2f\n", @$r ) )
+		  if $debug;
+		$gfx->rectxy( $r->[0], $r->[1], $r->[2], $r->[3] );
+		if ( $fillcolor && $hasborder ) {
+		    $gfx->fillstroke;
+		}
+		elsif ( $fillcolor ) {
+		    $gfx->fill;
 		}
 		else {
-		    $text->text($thetext);
+		    $gfx->stroke;
 		}
-
-		if ( $hasborder || $fillcolor ) {
-		    $gfx->save;
-		    $gfx->strokecolor( make_colour($bordercolor) );
-		    $gfx->fillcolor(   make_colour($fillcolor) ) if $fillcolor;
-		    $gfx->linewidth($borderwidth);
-		    $gfx->rectxy( $r->[0], -$r->[1], $r->[2], -$r->[3] );
-		    if ( $fillcolor && $hasborder ) {
-			$gfx->fillstroke;
-		    }
-		    elsif ( $fillcolor ) {
-			$gfx->fill;
-		    }
-		    else {
-			$gfx->stroke;
-		    }
-		    $gfx->restore;
-		}
+		$gfx->restore;
 	    }
-	    next;
+
+	    my $text = $page->text;
+	    $text->font($font, $fontsize);
+	    $text->fillcolor( make_colour($textcolor) );
+	    $text->strokecolor( make_colour($textcolor) );
+
+	    $text->save;
+	    $tr->( $text, $mx * $r->[4], - $my * $r->[5], 1, 1 );
+	    if ( $textalign == 1 ) {
+		$text->text_center($thetext);
+	    }
+	    elsif ( $textalign == 2 ) {
+		$text->text_right($thetext);
+	    }
+	    else {
+		$text->text($thetext);
+	    }
+	    $text->restore;
 	}
 
-	unless ( $type == 1 ) {	# drawing
-	    warn("Skipping annotation (type = $type)\n");
-	    next;
-	}
+	#### Drawing annotations ####
 
-	my $sth2 = $dbh->prepare( "SELECT LineColor,FillColor,LineWidth,DrawMode" .
-				 " FROM DrawAnnotations" .
-				 " WHERE BaseId = ?" );
+	elsif ( $type == DRAWTYPE_PEN || $type == DRAWTYPE_HIGHLIGHT ) {
 
-	$sth2->execute($annid);
-	$r = $sth2->fetch;
-	unless ( $r && $r->[0] ) {
-	    die("No annotation info for song $songid\n");
-	}
-	my ( $linecolor, $fillcolor, $linewidth, $drawmode ) = @$r;
+	    my $sth = $dbh->prepare( "SELECT LineColor,FillColor,LineWidth,DrawMode" .
+				     " FROM DrawAnnotations" .
+				     " WHERE BaseId = ?" );
 
-	$gfx->strokecolor( make_colour($linecolor) );
-	$gfx->fillcolor(   make_colour($fillcolor) );
-	$gfx->linewidth($linewidth);
-	$gfx->linejoin(1);	# round
-	$gfx->linecap(1);	# round
+	    $sth->execute($annid);
+	    $r = $sth->fetch;
+	    unless ( $r && $r->[0] ) {
+		die("No annotation info for song $songid\n");
+	    }
+	    my ( $linecolor, $fillcolor, $linewidth, $drawmode ) = @$r;
 
-	$sth2 = $dbh->prepare( "SELECT PointX,PointY FROM AnnotationPath" .
-			      " WHERE AnnotationId = ? ORDER BY Id" );
-	$sth2->execute($annid);
-
-	if ( $drawmode == 1 ) {
-	    my $r = $sth2->fetchall_arrayref;
-	    $gfx->rectxy( $r->[0]->[0], -$r->[0]->[1], $r->[1]->[0], -$r->[1]->[1] );
-	    $gfx->stroke;
-	    next;
-	}
-
-	if ( $drawmode == 2 ) {	# circle
-	    my $r = $sth2->fetchall_arrayref;
-	    $gfx->circle( $r->[0]->[0], -$r->[0]->[1], $r->[1]->[0] - $r->[0]->[0] );
-	    $gfx->stroke;
-	    next;
-	}
-
-	if ( $drawmode == 0 ) {
-	    my $r = $sth2->fetchall_arrayref;
-	    $gfx->poly( $r->[0]->[0], -$r->[0]->[1], $r->[1]->[0], -$r->[1]->[1] );
-	    $gfx->stroke;
-	    next;
-	}
-
-	unless ( $drawmode == 3 ) {
-	    warn("Skipping annotation (drawmode = $drawmode)\n");
-	    next;
-	}
-
-
-	$sth2->bind_columns( \my ( $x, $y ) );
-	my $point = 0;
-	my ( $px, $py ) = ( -1, -1 );
-
-	while ( $sth2->fetch ) {
-	    if ( $x > 10000 && $y > 10000 ) {
-		$gfx->stroke if $point;
-		$gfx->endpath;
-		$point = 0;
-		( $px, $py ) = ( -1, -1 );
-		# Next point is the same, so ignore it.
-		$sth2->fetch;
+	    unless ( $drawmode == DRAWMODE_LINE      ||
+		     $drawmode == DRAWMODE_RECTANGLE ||
+		     $drawmode == DRAWMODE_CIRCLE    ||
+		     $drawmode == DRAWMODE_FREEHAND ) {
+		warn("Skipping annotation (drawmode = $drawmode)\n");
 		next;
 	    }
 
-	    next if $px == $x && $py == $y;
-	    ( $px, $py ) = ( $x, $y );
-	    if ( $point++ ) {
-		warn( sprintf("page $curpage, line %.3f %.3f\n", $x, $y ) ) if $debug;
-		$gfx->line( $x, -$y );
+	    # Get a graphics content. For highlights, the annotations
+	    # should go underneath. Note that this only works if the
+	    # background is a transparent image or PDF.
+	    my $gfx = $page->gfx( $type == DRAWTYPE_HIGHLIGHT );
+
+	    # Set transformations.
+	    $gfx->save;
+	    $tr->($gfx, 0, 0, 1, -1 );
+
+	    # Set graphics properties.
+	    $gfx->strokecolor( make_colour($linecolor) );
+	    $gfx->fillcolor(   make_colour($fillcolor) );
+	    $gfx->linewidth($linewidth);
+	    $gfx->linejoin(1);	# round
+	    $gfx->linecap(1);	# round
+
+	    if ( $drawmode == DRAWMODE_LINE ) {
+		my $r = get_path( $dbh, $annid ); # 2 points
+		warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f\n", @$r ) )
+		  if $debug;
+		$gfx->poly(@$r);
+		$gfx->stroke;
 	    }
-	    else {
-		warn( sprintf("page $curpage, move %.3f %.3f\n", $x, $y ) ) if $debug;
-		$gfx->move( $x, -$y );
+
+	    elsif ( $drawmode == DRAWMODE_RECTANGLE ) {
+		my $r = get_path( $dbh, $annid ); # 2 points
+		warn( sprintf( "page $curpage, rect %.3f %.3f %.3f %.3f\n", @$r ) )
+		  if $debug;
+		$gfx->rectxy(@$r);
+		$gfx->stroke;
 	    }
+
+	    elsif ( $drawmode == DRAWMODE_CIRCLE ) {
+		my $r = get_path( $dbh, $annid ); # 1 point + radius
+		warn( sprintf( "page $curpage, circel %.3f %.3f %.3f\n", @$r ) )
+		  if $debug;
+		$gfx->circle( $r->[0], $r->[1], $r->[2] - $r->[0] );
+		$gfx->stroke;
+	    }
+
+	    else {	# $drawmode == DRAWMODE_FREEHAND
+
+		my $r = get_path( $dbh, $annid ); # a lot of points
+		my ( $px, $py ) = ( -1, -1 );     # previous point to suppress dups
+
+		my @points;		# points currently on path
+
+		while ( @$r ) {
+		    my ( $x, $y ) = splice( @$r, 0, 2 );
+		    if ( $x > 10000 && $y > 10000 ) {
+			if ( @points ) {
+			    warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f ...\n",
+					   @points[0..3] ) ) if $debug;
+			    $gfx->poly(@points);
+			    $gfx->stroke;
+			    $gfx->endpath;
+			    @points = ();
+			}
+			( $px, $py ) = ( -1, -1 );
+			# Next point is the same, so ignore it.
+			splice( @$r, 0, 2 );
+			next;
+		    }
+
+		    next if $px == $x && $py == $y;
+		    ( $px, $py ) = ( $x, $y );
+		    push( @points, $x, $y );
+		}
+		if ( @points ) {
+		    warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f ...\n",
+				   @points[0..3] ) ) if $debug;
+		    $gfx->poly(@points);
+		    $gfx->stroke;
+		}
+	    }
+
+	    $gfx->restore;
 	}
 
-	$gfx->stroke if $point;
-    }
-    continue {
-	$gfx->restore;
+	elsif ( $type == DRAWTYPE_STAMP ) {
+
+	    my $sth = $dbh->prepare( "SELECT StampIndex,StampSize" .
+				     " FROM StampAnnotations" .
+				     " WHERE BaseId = ?" );
+
+	    $sth->execute($annid);
+	    $r = $sth->fetch;
+	    unless ( $r && $r->[0] ) {
+		die("No annotation info for song $songid\n");
+	    }
+	    my ( $stampindex, $stampsize ) = @$r;
+
+	    my $r = get_path( $dbh, $annid );
+
+	    warn( sprintf( "stamp $stampindex @ %.2f %2f\n", @$r ) );
+
+	    my $gfx = $page->gfx;
+	    $gfx->fillcolor( "#FF00FF" );
+	    $gfx->strokecolor( "#FF00FF" );
+
+	    $gfx->save;
+	    $tr->( $gfx, 0, 0, 1, -1 );
+	    my $sz = $stampsize / 4;
+	    $gfx->rect( $r->[0], $r->[1], $sz, $sz );
+	    $gfx->poly( $r->[0], $r->[1], $r->[0] + $sz, $r->[1] + $sz );
+	    $gfx->poly( $r->[0] + $sz, $r->[1], $r->[0], $r->[1] + $sz );
+	    $gfx->stroke;
+	    $gfx->restore;
+
+	    my $text = $page->text;
+	    $text->font( $font, $sz/1.5 );
+	    $text->fillcolor( "#FF00FF" );
+	    $text->strokecolor( "#FF00FF" );
+
+	    $text->save;
+	    $tr->( $text, 0, 0, 1, 1 );
+	    $sz = $stampsize / 4;
+	    $tr->( $text, $mx * ( $sz/2 + $r->[0]), - ( $sz/2.8 + $my * $r->[1]), 1, 1 );
+	    $text->text_center( $stampindex );
+	    $text->restore;
+
+	}
+
+	else {
+	    warn("Skipping annotation (type = $type)\n");
+	}
+
     }
 
     $pdf->saveas($pdfdst);
 
 }
 
+my $gp_sth;
 sub get_path {
     my ( $dbh, $id ) = @_;
-    my $r = $dbh->selectall_arrayref( "SELECT PointX,PointY FROM AnnotationPath" .
-				     " WHERE AnnotationId = $id ORDER BY Id" );
-    my @r;
-    push( @r, @$_ ) foreach @$r;
-    \@r;
+    $gp_sth ||= $dbh->prepare( "SELECT PointX, PointY FROM AnnotationPath" .
+			       " WHERE AnnotationId = ? ORDER BY Id" );
+    $gp_sth->execute($id);
+
+    my $r = $gp_sth->fetchall_arrayref;
+    $gp_sth->finish;
+
+    return [ map { @$_ } @$r ];
+
 }
 
 sub make_colour {
