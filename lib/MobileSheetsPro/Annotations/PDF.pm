@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun  9 17:21:16 2015
-# Update Count    : 456
+# Last Modified On: Thu Jun 11 14:35:11 2015
+# Update Count    : 479
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -50,6 +50,7 @@ sub flatten_song {
 
     my $sth;
     my $r;
+    my $xparent = 0;		# document with alpha
 
     my $title = lookup( qw( Songs Title ), $songid );
     die("Unknown song $songid\n") unless $title;
@@ -59,10 +60,12 @@ sub flatten_song {
     if ( $songsrc && $songsrc =~ /\.pdf$/ ) {
 	warn("Song file \"$songsrc\"\n") if $verbose;
 	$pdf = PDF::API2->open($songsrc);
+	# Consider PDFs to be transparent.
+	$xparent++;
     }
     elsif ( $songsrc && $songsrc =~ /\.jpe?g$/ ) {
 	warn("Song file \"$songsrc\"\n") if $verbose;
-	$pdf = PDF::API2->new;
+	$pdf = PDF::API2->new( forcecompress => 0 );
 	my $jpg = $pdf->image_jpeg($songsrc);
 	my $page = $pdf->page;
 	$page->mediabox( 0, 0, DPI_SCALE * $jpg->width, DPI_SCALE * $jpg->height );
@@ -71,6 +74,8 @@ sub flatten_song {
     else {
 	$pdf = PDF::API2->new;
     }
+    # $pdf->{'forcecompress'} = 0; # testing
+
     my $font ||= $pdf->ttfont( $ENV{HOME}."/.fonts/DejaVuSans.ttf" );
 
     $sth = $dbh->prepare( "SELECT Id, Page, Type, GroupNum, Alpha,".
@@ -211,11 +216,18 @@ sub flatten_song {
 	    # Get a graphics content. For highlights, the annotations
 	    # should go underneath. Note that this only works if the
 	    # background is a transparent image or PDF.
-	    my $gfx = $page->gfx( $type == DRAWTYPE_HIGHLIGHT );
+	    my $gfx = $page->gfx( $type == DRAWTYPE_HIGHLIGHT && $xparent );
 
 	    # Set transformations.
 	    $gfx->save;
 	    $tr->($gfx, 0, 0, 1, -1 );
+
+	    # Make this object transparent if necessary.
+	    if ( $type == DRAWTYPE_HIGHLIGHT && $alpha < 254 ) {
+		my $extgs = $pdf->egstate;
+		$extgs->transparency( $alpha / 255 );
+		$gfx->egstate($extgs);
+	    }
 
 	    # Set graphics properties.
 	    $gfx->strokecolor( make_colour($linecolor) );
