@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Jun 11 14:35:11 2015
-# Update Count    : 479
+# Last Modified On: Fri Jun 12 21:10:33 2015
+# Update Count    : 480
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -65,7 +65,7 @@ sub flatten_song {
     }
     elsif ( $songsrc && $songsrc =~ /\.jpe?g$/ ) {
 	warn("Song file \"$songsrc\"\n") if $verbose;
-	$pdf = PDF::API2->new( forcecompress => 0 );
+	$pdf = PDF::API2->new;
 	my $jpg = $pdf->image_jpeg($songsrc);
 	my $page = $pdf->page;
 	$page->mediabox( 0, 0, DPI_SCALE * $jpg->width, DPI_SCALE * $jpg->height );
@@ -74,7 +74,7 @@ sub flatten_song {
     else {
 	$pdf = PDF::API2->new;
     }
-    # $pdf->{'forcecompress'} = 0; # testing
+    # $pdf->{forcecompress} = 0; # testing
 
     my $font ||= $pdf->ttfont( $ENV{HOME}."/.fonts/DejaVuSans.ttf" );
 
