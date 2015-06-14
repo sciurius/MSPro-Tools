@@ -14,6 +14,9 @@ Requirements:
 
 Tools:
 
+Note: All tools support a --help command line option for more
+information.
+
 msb_unpack.pl
 
 This tool unpacks a MSPro backup set into the current directory.
@@ -55,6 +58,38 @@ Usage:
   Supported annotations:
 
   - drawing annotations (line, rectangle, circle, free)
+  - highlight annotations (line, rectangle, circle, free)
   - text annotations, but no fancy font stuff
+
+get_meta.pl
+
+This program will retrieve the metadata for all songs from the
+MobileSheetsPro database and write it out in JSON format.
+
+Usage
+
+  perl script/get_meta.pl
+
+  (Note: You may need to adjust the path to perl and the script if
+  they are not accessible from the current directory.)
+
+  The output will be similar to
+
+       {
+	  "title"       : "13. The Old Triangle"
+	  "sorttitle"   : "013 The Old Triangle",
+	  "artists"     : [ "Luke Kelly & the Dubliners" ],
+	  "collections" : [ "HowsaGoin!" ],
+	  "tempo"       : [ 92 ],
+	  "keys"        : [ "C" ],
+	  "signatures"  : [ "3/4" ],
+	  "paths"       : [
+	     {
+		"path" : "/storage/sdcard1/Music/013_The_Old_Triangle.pdf"
+		"type" : "PDF",
+		"source" : "Sheet Music",
+	     }
+	  ],
+       },
 
 WARNING: See WARNING above.
