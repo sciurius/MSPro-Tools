@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jun 14 23:37:57 2015
-# Update Count    : 128
+# Last Modified On: Mon Jun 15 13:52:03 2015
+# Update Count    : 133
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -18,7 +18,7 @@ use lib "$FindBin::Bin/../lib";
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( get_meta 0.01 );
+my ($my_name, $my_version) = qw( get_meta 0.02 );
 
 ################ Command line parameters ################
 
@@ -27,6 +27,7 @@ use Getopt::Long 2.13;
 # Command line options.
 my $dbname = "mobilesheets.db";
 my $output;
+my $annotations = 0;		# include annotations
 my $verbose = 0;		# verbose processing
 
 # Development options (not shown with -help).
@@ -70,7 +71,7 @@ foreach ( @$ret ) {
     push( @$meta,
 	  { title     => $title,
 	    sorttitle => $stitle,
-	    songid    => $songid,
+	    $trace ? ( songid => $songid ) : (),
 	    paths     => [],
 	  } );
 
@@ -85,7 +86,7 @@ foreach ( @$ret ) {
 
 	my $mp =
 	  { path   => $path,
-	    fileid => $fileid,
+	    $trace ? ( fileid => $fileid ) : (),
 	    source => lookup( qw(SourceType Type), $source),
 	    type   => $filetypes[$type] // $type,
 	  };
@@ -140,19 +141,22 @@ foreach ( @$ret ) {
     foreach ( @$ret ) {
 	push( @t, $_->[0] );
     }
-    $meta->[-1]->{tempo} = \@t if @t;
+    $meta->[-1]->{tempos} = \@t if @t;
 
+    $ret = [];
     $ret = dbh->selectall_arrayref( "SELECT Id, Page, Type, GroupNum,".
 				    " Alpha, Zoom, ZoomY, Version" .
 				    " FROM AnnotationsBase" .
 				    " WHERE SongID = $songid" .
-				    " ORDER BY Page,GroupNum,Id" );
+				    " ORDER BY Page,GroupNum,Id" )
+      if $annotations;
+
     my $ann = [];
 
     foreach ( @$ret ) {
 	my ( $annid, $page, $type, $group, $alpha,
 	     $zoomx, $zoomy, $version) = @$_;
-	my $a = { annid	   => $annid,
+	my $a = { $trace ? ( annid => $annid ) : (),
 		  type	   => $anntypes[$type] // $type,
 		  alpha	   => $alpha,
 		  zoom	   => [ $zoomx, $zoomy ],
@@ -271,6 +275,7 @@ sub app_options {
 	GetOptions('ident'	=> \$ident,
 		   'db=s',	=> \$dbname,
 		   'output=s'	=> \$output,
+		   annotations  => \$annotations,
 		   'verbose'	=> \$verbose,
 		   'trace'	=> \$trace,
 		   'help|?'	=> \$help,
@@ -302,6 +307,7 @@ sample [options] [file ...]
  Options:
    --db=XXX		name of the MSPro database
    --output=XXX		name of the output file, default is standard output
+   --annotations	include annotations
    --ident		show identification
    --help		brief help message
    --man                full documentation
@@ -324,6 +330,10 @@ Specifies the name of the output file to write the JSON data to.
 Default is standard output.
 
 Print a brief help message and exits.
+
+=item B<--annotations>
+
+Includes the annotations in the meta data.
 
 =item B<--help>
 
