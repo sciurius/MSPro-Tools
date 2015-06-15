@@ -109,4 +109,10 @@ Usage
   a path "/storage/sdcard1/Music/013_The_Old_Triangle.pdf" will search
   the database for a file entry ending in "013_The_Old_Triangle.pdf".
 
+  WARNING: You need to copy the MobileSheetsPro database from the
+  tablet to the PC, run this program, and then copy the (modified)
+  database back to the tablet. This is a risky process that can blow
+  up your music collection, MobileSheetsPro, the tablet, and your cat.
+  See https://www.youtube.com/watch?v=MgxgYL5P4z4 .
+
 WARNING: See WARNING above.
