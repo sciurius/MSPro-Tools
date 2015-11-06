@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun May 31 20:54:05 2015
-# Update Count    : 118
+# Last Modified On: Fri Nov  6 17:08:31 2015
+# Update Count    : 220
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -57,6 +57,19 @@ use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
 # xxxxxxxxxxxxxxxx 8-byte data length
 # xxxxxxxxxxxxxxxx database file data
 #
+# OR:
+#
+# 499602d5         file magic word (version 4) 1234567893
+# xxxx             4-byte number of settings items
+# xx		   2-byte item name length
+# aaaaaaa	   item name
+# xxxxxxxxxxxxxxxx 8-byte data length
+# xxxxxxxxxxxxxxxx item data
+# ... rinse, repeat ...
+# xxxxxxxxxxxxxxxx 8-byte data length
+# xxxxxxxxxxxxxxxx database file data
+#
+#
 # Followed by zero or more:
 #
 # 11deda2c5161659c 8-byte header magic word 1287706427353294236
@@ -76,128 +89,259 @@ my $FILE_MAGIC   = 1234567892;
 my $HDR_MAGIC    = 1287706427353294236;
 my $EOF_SENTINEL = "\xff" x 8;
 
-sysopen( my $fd, $msbfile, O_RDONLY, 0 )
-  or die("$msbfile: $!\n");
-
-my $buf;
-my $len = sysread( $fd, $buf, 4 );
-die("Not a valid MSPro backup file\n")
-  unless $len == 4 && unpack( "N", $buf) == $FILE_MAGIC;
-
-# First entry in the file is the database.
-
-$len = read8();
-my $file = 0;
-warn( "file $file, length = $len\n" ) if $debug;
-my $path = "mobilesheets.db";
-
-# For database date.
-my $dbh;
-my $sth;
+my $msb = MSB->new->open($msbfile);
+warn("Reading MobileSheetsPro backup set version ",
+     $msb->version, "\n") if $debug;
 
 # For zip output.
-my $zip;
-if ( $zipfile ) {
-    $zip = Archive::Zip->new;
+$msb->zip( Archive::Zip->new ) if $zipfile;
+
+if ( $msb->version >= 4 ) {
+    $msb->handle_preferences;
 }
 
-for ( ;; ) {
+# First entry in the file is the database.
+$msb->handle_database( "mobilesheets.db" );
 
-    my $fn = sprintf( "file%03d.dat", $file );
-    my $mtime = 0;
-    my $sz = 0;
-    if ( $dbh ) {
-	$path = "";
-	# Be careful -- the database may be damaged.
-	eval {
-	    $sth->execute( $file );
-	    ( $path, $mtime, $sz ) = @{ $sth->fetch };
-	    $mtime = int( $mtime/1000 );
-	    warn( "File $file, path = $path, size = $sz ($len), mtime = $mtime (" .
-		  localtime($mtime) . ")\n" )
-	      if $verbose;
-	    $sth->finish;
-	};
+my $len;
+my $file = 0;
+
+while ( my $n = $msb->read(8) ) {
+
+    if ( $n != $HDR_MAGIC ) {
+	# Add recovery later.
+	die("OOPS -- Missing magic... punting\n");
+    }
+
+    my $songid = $msb->read(8);
+    $msb->get_dbfiles($songid);
+
+    while ( my $info = shift( @{ $msb->dbfiles } )  ) {
+	my ( $path, $mtime, $sz ) = @$info;
+	unless ( $path ) {
+	    warn("Song $songid, not included\n") if $debug;
+	    last;
+	}
+	$mtime = int( $mtime/1000 );
+	my $len = $msb->read(8);
+	warn( "Song $songid, path = $path, size = $sz, mtime = $mtime (" .
+	      localtime($mtime) . ")\n" )
+	  if $verbose;
+
+	if ( !$len ) {
+	    # Placeholder for files not physically present in the backup set.
+	    warn("Placeholder: $path\n") if $debug;
+	    next;
+	}
 
 	# This is puzzling. Sometimes I see two songs that refer to
 	# the same physical file. Apparently two versions. Both
 	# versions are in the backup, the first with the length of the
 	# second and the second with a length of zero.
-	warn("File $file, size mismatch $sz <> $len\n") unless $sz == $len;
+	warn("Song $songid, size mismatch $sz <> $len\n") unless $sz == $len;
 	# Mike: This is how I dealt with dups and missing files.
-    }
 
-    if ( $zip && $file ) {
-	# Store into zip.
-	sysread( $fd, $buf, $len );
-	warn("AddString: $path\n");
-	my $m = $zip->addString( $buf, $path, COMPRESSION_STORED );
-	$m->setLastModFileDateTimeFromUnix($mtime);
-    }
-    else {
-	# Make file name and create it.
-	$path =~ s;^.*/;;;
-	$fn = $path if $path;
+	# Read data.
+	$msb->readbuf( \my $buf, $len );
 
-	# We need a disk file for SQLite, so store the database
-	# in a temp file.
-	$fn = Archive::Zip::tempFile if $zip;
-
-	sysopen( my $of, $fn, O_WRONLY|O_CREAT, 0666 );
-	# Copy contents.
-	sysread( $fd, $buf, $len );
-	syswrite( $of, $buf );
-	# Close.
-	close($of);
-	utime( $mtime, $mtime, $fn ) if $mtime;
-    }
-
-    # Special treatment for the first file (the database).
-    if ( $file == 0 ) {
-	if ( $zipfile ) {
-	    # Add to the zip.
-	    $zip->addFile( $fn, $path, COMPRESSION_DEFLATED );
+	if ( $msb->zip ) {
+	    # Store into zip.
+	    warn("AddString: $path\n");
+	    my $m = $msb->zip->addString( $buf, $path, COMPRESSION_STORED );
+	    $m->setLastModFileDateTimeFromUnix($mtime);
 	}
-	eval {
-	    $dbh = DBI::->connect( "dbi:SQLite:dbname=$fn", "", "" );
-	    $sth = $dbh->prepare( "SELECT Path,LastModified,FileSize FROM Files WHERE SongId = ?" );
-	};
+	else {
+	    # Make file name and create it.
+	    my $fn = $path;
+	    $path =~ s;^.*/;;;
+	    $fn = $path if $path;
+	    create_file( $fn, $buf, undef, $mtime );
+	}
     }
-
-    die("Corrupted data -- header magic not found\n")
-      unless read8() == $HDR_MAGIC;
-
-    $file = read8();		# database song id
-    $len = read8();
-    warn("file = $file, length = $len\n") if $debug;
-
-    # Next iteration will copy the contents.
 }
 
 END {
-    if ( $zip ) {
+    if ( $msb && $msb->zip ) {
 	warn("$zipfile: Write error\n")
-	  unless $zip->writeToFileNamed($zipfile) == AZ_OK;
-	$zip = "";
+	  unless $msb->zip->writeToFileNamed($zipfile) == AZ_OK;
+	$msb->zip(0);
     }
 }
 
 ################ Subroutines ################
 
-sub read8 {
-    my $buf;
-    my $n = sysread( $fd, $buf, 8 );
+sub create_file {
+    my ( $fn, $buf, $len, $mtime ) = @_;
+    sysopen( my $of, $fn, O_WRONLY|O_CREAT, 0666 )
+      or die("$fn: $!\n");
+    # Copy contents.
+    $len ||= length($buf);
+    syswrite( $of, $buf, $len ) == $len
+      or die("$fn: short write:  $!\n");
+    # Close.
+    close($of)
+      or die("$fn: close:  $!\n");
+    utime( $mtime, $mtime, $fn ) if $mtime;
+}
 
+################ Subroutines ################
+
+package MSB;
+
+use Fcntl qw( SEEK_CUR O_RDONLY O_WRONLY O_CREAT );
+use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
+
+sub new {
+    my ( $pkg ) = @_;
+    bless {}, $pkg
+}
+
+sub open {
+    my ( $self, $fn ) = @_;
+    sysopen( my $fd, $fn, O_RDONLY )
+      or die("$fn: $!\n");
+    $self->{fd} = $fd;
+
+    my $magic = $self->read(4);
+    if ( $magic == $FILE_MAGIC ) {
+	$self->{version} = 3;
+    }
+    elsif ( $magic == $FILE_MAGIC+1 ) {
+	$self->{version} = 4;
+    }
+    die("Not a valid MSPro backup file (wrong version?)\n")
+      unless $self->{version};
+
+    $self;
+}
+
+sub read {
+    my ( $self, $want ) = @_;
+    my $buf = "";
+    my $n = sysread( $self->{fd}, $buf, $want );
     if ( $n eq length($EOF_SENTINEL) && $buf eq $EOF_SENTINEL ) {
 	warn("EOF\n") if $debug;
 	exit;
     }
-    if ( $n < 8 ) {
-	warn("short read: $n bytes instead of 8\n");
+
+    if ( $n < $want ) {
+	warn("short read: $n bytes instead of $want\n");
     }
+    return unpack( "N", $buf ) if $want == 4;
+    return unpack( "n", $buf ) if $want == 2;
     my @a = unpack( "NN", $buf );
     $a[0] << 32 | $a[1];
 }
+
+sub readstring {
+    my ( $self, $want ) = @_;
+    my $buf;
+    my $n = sysread( $self->{fd}, $buf, $want );
+    if ( $n < $want ) {
+	warn("short read: $n bytes instead of $want\n");
+    }
+    return $buf;
+}
+
+sub readbuf {
+    my ( $self, $bufref, $want ) = @_;
+    my $n = sysread( $self->{fd}, $$bufref, $want );
+    if ( $n < $want ) {
+	warn("short read: $n bytes instead of $want\n");
+    }
+    return $n;
+}
+
+sub version { $_[0]->{version} }
+
+sub zip {
+    my ( $self, $zip ) = @_;
+    $self->{zip} = $zip if defined $zip;
+    return $self->{zip};
+}
+
+sub handle_preferences {
+    my ( $self ) = @_;
+    my $items = $self->read(4);
+    warn("Number of pref items = $items\n") if $debug;
+    for my $i ( 0..$items-1 ) {
+	my $len = $self->read(2);
+	my $path = $self->readstring($len) . ".xml";
+	warn("Pref item: $path\n") if $debug;
+	$len = $self->read(8);
+	$self->readbuf( \my $data, $len );
+#	warn("item: ", substr($data, 0, 20), "...\n");
+
+	if ( $self->zip ) {
+	    # Store into zip.
+	    warn("AddString: $path\n");
+	    my $m = $self->zip->addString( $data, $path, COMPRESSION_STORED );
+	}
+	else {
+	    ::create_file( $path, $data, $len );
+	}
+    }
+}
+
+sub handle_database {
+    my ( $self, $dbfile ) = @_;
+
+    my $len = $self->read(8);
+    warn( "Database length = $len\n" ) if $debug;
+
+    my $path = $dbfile;
+    $path =~ s;^.*/;;;
+    $dbfile = $path if $path;
+
+    # Read content.
+    $msb->readbuf( \my $buf, $len );
+
+    # We need a disk file for SQLite, so store the database
+    # in a temp file.
+    if ( $self->zip ) {
+	# Add to the zip.
+	$dbfile = Archive::Zip::tempFile;
+	::create_file( $dbfile, $buf );
+	$self->zip->addFile( $dbfile, $path, COMPRESSION_DEFLATED );
+    }
+    else {
+	::create_file( $dbfile, $buf );
+    }
+    # Connect to SQLite database.
+    eval {
+	$self->{dbh} = DBI::->connect( "dbi:SQLite:dbname=$dbfile", "", "" );
+    };
+}
+
+sub get_dbfiles {
+    my ( $self, $songid ) = @_;
+    # Get the list of files associated with this song.
+    # Oops. The previous song needed some more files...
+    warn("Missing: $_->[0]\n") foreach @{ $self->dbfiles };
+    $self->{dbfiles} = [];
+    my $sth = $self->{dbh}->prepare
+      ( "SELECT Path,LastModified,FileSize FROM Files WHERE SongId = ?" );
+    $sth->execute($songid);
+    while ( my $rr = $sth->fetch ) {
+	push( @{ $self->{dbfiles} }, [ @$rr ] );
+    }
+    my $i = @{ $self->{dbfiles} };
+    $sth = $self->{dbh}->prepare
+      ( "SELECT File,LastModified,FileSize FROM AudioFiles WHERE SongId = ?" );
+    $sth->execute($songid);
+    while ( my $rr = $sth->fetch ) {
+	push( @{ $self->{dbfiles} }, [ @$rr ] );
+    }
+    warn( "DB files: $i + ", @{ $self->{dbfiles} }-$i, " audio\n" ) if $debug;
+}
+
+sub dbfiles {
+    my ( $self) = @_;
+    $self->{dbfiles} ||= [];
+    wantarray ? @{ $self->{dbfiles} } : $self->{dbfiles};
+}
+
+package main;
 
 ################ Subroutines ################
 
