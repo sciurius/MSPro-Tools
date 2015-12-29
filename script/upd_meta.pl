@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Thu May 28 08:13:56 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Jun 15 14:13:26 2015
-# Update Count    : 83
+# Last Modified On: Tue Dec 29 13:56:43 2015
+# Update Count    : 87
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -26,6 +26,7 @@ use Getopt::Long 2.13;
 
 # Command line options.
 my $dbname = "mobilesheets.db";
+my $pathfull = 0;		# match on full path name
 my $verbose = 0;		# verbose processing
 
 # Development options (not shown with -help).
@@ -57,7 +58,8 @@ my $meta = JSON->new->decode($data);
 db_open( $dbname, { RaiseError => 1, Trace => $trace } );
 
 my $sth = dbh->prepare( "SELECT Path, Id, SongId" .
-			" FROM Files WHERE Path LIKE ?" );
+			" FROM Files WHERE Path " .
+			( $pathfull ? " =" : "LIKE" ) . " ?" );
 
 foreach my $m ( @$meta ) {
     next unless $m->{paths};
@@ -65,7 +67,7 @@ foreach my $m ( @$meta ) {
     foreach my $p ( @{ $m->{paths} } ) {
 
 	my $path = $p->{path};
-	$path =~ s;^.*/([^/]+)$;$1;;
+	$path =~ s;^.*/([^/]+)$;$1; unless $pathfull;
 
 	$sth->execute($path);
 	my $ret = $sth->fetchall_arrayref;
@@ -267,6 +269,7 @@ sub app_options {
     if ( @ARGV > 0 ) {
 	GetOptions('ident'	=> \$ident,
 		   'db=s',	=> \$dbname,
+		   'path-full'  => \$pathfull,
 		   'verbose'	=> \$verbose,
 		   'trace'	=> \$trace,
 		   'help|?'	=> \$help,
@@ -298,6 +301,7 @@ upd_meta [options] json-file
 
  Options:
    --db=XXX		name of the MSPro database
+   --path-full		match on full path names
    --ident		show identification
    --help		brief help message
    --man                full documentation
@@ -312,6 +316,15 @@ upd_meta [options] json-file
 Specifies the name of the MobileSheetsPro database.
 
 Default is C<"mobilesheets.db">.
+
+=item B<--path-full>
+
+Normally upd_meta looks for files in the database based on the
+filename without path. This can lead to problems when there are files
+with identical names in different paths.
+
+Using the B<--path-full> command line option makes the program search
+for files based on filename including the path.
 
 =item B<--help>
 
