@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Dec 30 08:27:30 2015
-# Update Count    : 139
+# Last Modified On: Wed Dec 30 10:11:18 2015
+# Update Count    : 148
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -62,10 +62,11 @@ db_open( $dbname, { RaiseError => 1, Trace => $trace } );
 my $meta = [];
 
 my $ret = dbh->selectall_arrayref( "SELECT Id, Title, SortTitle" .
+				   ",Custom,Custom2" .
 				   " FROM Songs ORDER BY Id" );
 
 foreach ( @$ret ) {
-    my ( $songid, $title, $stitle ) = @$_;
+    my ( $songid, $title, $stitle, $custom, $custom2 ) = @$_;
     warn( "Song[$songid]: $title\n" ) if $trace;
 
     push( @$meta,
@@ -73,6 +74,8 @@ foreach ( @$ret ) {
 	    $stitle ? ( sorttitle => $stitle ) : (),
 	    songid    => $songid,
 	    paths     => [],
+	    $custom ? ( custom => $custom ) : (),
+	    $custom2 ? ( custom2 => $custom2 ) : (),
 	  } );
 
     my $ret = dbh->selectall_arrayref( "SELECT Id, Path, Source, Type" .
@@ -247,9 +250,35 @@ if ( $output && $output ne "-" ) {
     open( STDOUT, ">:utf8", $output );
 }
 
-print STDOUT $json->encode($meta);
+$output = $json->encode($meta);
+
+# Try to compact small "key" : [ value ] entries,
+$output =~ s/(^\s*"[^"]+"\s*:\s*\[)([^\[\]]+\])/compact($1,$2)/gme;
+
+print STDOUT $output;
 
 ################ Subroutines ################
+
+# Compact
+#
+#   "key" : [
+#              "Value1",
+#              "Value2"
+#           ]
+#
+# to
+#
+#   "key" : [ "Value1", "Value2" ]
+#
+# provided the end result is not too long.
+
+sub compact {
+    my ( $t1, $t2) = @_;
+    my $t = $t2;
+    $t =~ s/ *\n */ /g;
+    return $t1.$t if length($t1.$t) < 80;
+    $t1.$t2;
+}
 
 sub make_colour {
     my ( $col ) = @_;
