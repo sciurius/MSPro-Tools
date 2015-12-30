@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Dec 27 21:29:09 2015
-# Update Count    : 135
+# Last Modified On: Wed Dec 30 08:11:11 2015
+# Update Count    : 137
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -86,7 +86,7 @@ foreach ( @$ret ) {
 
 	my $mp =
 	  { path   => $path,
-	    $trace ? ( fileid => $fileid ) : (),
+	    fileid => $fileid,
 	    source => lookup( qw(SourceType Type), $source) // $source,
 	    type   => $filetypes[$type] // $type,
 	  };
@@ -241,7 +241,7 @@ foreach ( @$ret ) {
 }
 
 my $json = JSON->new;
-$json->ascii->pretty->allow_nonref;
+$json->utf8->canonical->pretty->allow_nonref;
 
 if ( $output && $output ne "-" ) {
     open( STDOUT, ">:utf8", $output );
