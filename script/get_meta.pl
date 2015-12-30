@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Dec 30 08:11:11 2015
-# Update Count    : 137
+# Last Modified On: Wed Dec 30 08:27:30 2015
+# Update Count    : 139
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -70,8 +70,8 @@ foreach ( @$ret ) {
 
     push( @$meta,
 	  { title     => $title,
-	    sorttitle => $stitle,
-	    $trace ? ( songid => $songid ) : (),
+	    $stitle ? ( sorttitle => $stitle ) : (),
+	    songid    => $songid,
 	    paths     => [],
 	  } );
 
