@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Dec 31 10:35:14 2015
-# Update Count    : 164
+# Last Modified On: Thu Dec 31 19:58:42 2015
+# Update Count    : 165
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -18,7 +18,7 @@ use lib "$FindBin::Bin/../lib";
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( get_meta 0.02 );
+my ($my_name, $my_version) = qw( get_meta 0.03 );
 
 ################ Command line parameters ################
 
