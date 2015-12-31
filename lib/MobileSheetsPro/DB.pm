@@ -25,6 +25,7 @@ sub db_open {
     $opts ||= {};
     $trace = delete( $opts->{Trace} );
     Carp::croak("No database $dbname\n") unless -s $dbname;
+    $opts->{sqlite_unicode} = 1;
     $dbh = DBI::->connect( "dbi:SQLite:dbname=$dbname", "", "", $opts );
 }
 

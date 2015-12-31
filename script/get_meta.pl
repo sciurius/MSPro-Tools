@@ -3,14 +3,14 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Dec 31 10:14:21 2015
-# Update Count    : 158
+# Last Modified On: Thu Dec 31 10:35:14 2015
+# Update Count    : 164
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
 use strict;
-
+use utf8;
 use FindBin;
 
 use lib "$FindBin::Bin/../lib";
@@ -252,7 +252,7 @@ my $json = JSON->new;
 $json->utf8->canonical->pretty->allow_nonref;
 
 if ( $output && $output ne "-" ) {
-    open( STDOUT, ">:utf8", $output );
+    open( STDOUT, ">", $output );
 }
 
 $output = $json->encode($meta);
@@ -260,7 +260,7 @@ $output = $json->encode($meta);
 # Try to compact small "key" : [ value ] entries,
 $output =~ s/(^\s*"[^"]+"\s*:\s*\[)([^\[\]]+\])/compact($1,$2)/gme;
 
-print STDOUT $output;
+print STDOUT ( $output );
 
 ################ Subroutines ################
 
