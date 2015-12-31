@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Dec 31 19:58:42 2015
-# Update Count    : 165
+# Last Modified On: Thu Dec 31 20:39:52 2015
+# Update Count    : 170
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -27,6 +27,7 @@ use Getopt::Long 2.13;
 # Command line options.
 my $dbname = "mobilesheets.db";
 my $output;
+my $songid;
 my $annotations = 0;		# include annotations
 my $verbose = 0;		# verbose processing
 
@@ -64,7 +65,9 @@ my $meta = [];
 
 my $ret = dbh->selectall_arrayref( "SELECT Id, Title, SortTitle" .
 				   ",Custom,Custom2" .
-				   " FROM Songs ORDER BY Id" );
+				   " FROM Songs" .
+				   ($songid ? " WHERE Id = $songid" : "") .
+				   " ORDER BY Id" );
 
 foreach ( @$ret ) {
     my ( $songid, $title, $stitle, $custom, $custom2 ) = @$_;
@@ -309,6 +312,7 @@ sub app_options {
 	GetOptions('ident'	=> \$ident,
 		   'db=s',	=> \$dbname,
 		   'output=s'	=> \$output,
+		   'songid=i'   => \$songid,
 		   annotations  => \$annotations,
 		   'verbose'	=> \$verbose,
 		   'trace'	=> \$trace,
@@ -341,6 +345,7 @@ sample [options] [file ...]
  Options:
    --db=XXX		name of the MSPro database
    --output=XXX		name of the output file, default is standard output
+   --songid=NNN		output only data for this song
    --annotations	include annotations
    --ident		show identification
    --help		brief help message
@@ -364,6 +369,10 @@ Specifies the name of the output file to write the JSON data to.
 Default is standard output.
 
 Print a brief help message and exits.
+
+=item B<--songid=>I<id>
+
+Output data only for the song with the given C<id>.
 
 =item B<--annotations>
 
