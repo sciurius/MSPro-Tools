@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Dec 30 10:11:18 2015
-# Update Count    : 148
+# Last Modified On: Thu Dec 31 10:14:21 2015
+# Update Count    : 158
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -52,6 +52,7 @@ use DBI;
 use Data::Dumper;
 use JSON;
 
+my @sources  = ( undef, undef, 'sdcard' );
 my @filetypes  = ( 'Image', 'PDF', undef, 'ChordPro' );
 my @anntypes   = qw( text draw highlight stamp );
 my @aligntypes = qw( left right center );
@@ -90,7 +91,8 @@ foreach ( @$ret ) {
 	my $mp =
 	  { path   => $path,
 	    fileid => $fileid,
-	    source => lookup( qw(SourceType Type), $source) // $source,
+	    # Source is where the file is located. Currently always 1 (scdard).
+	    source => $sources[1+$source] // $source,
 	    type   => $filetypes[$type] // $type,
 	  };
 	push( @{ $meta->[-1]->{paths} }, $mp );
@@ -113,14 +115,16 @@ foreach ( @$ret ) {
     }
 
     my $std = sub {
-	my ( $Table, $STable ) = @_;
+	my ( $Table, $STable, $Name, $SId ) = @_;
 	$STable //= $Table . 'Songs';
+	$SId //= 'SongID';
+	$Name //= 'Name';
 	my $TableId = $Table . "Id";
 	$TableId =~ s/sId$/Id/;
 	my $ret = dbh->selectall_arrayref
-	  ( "SELECT Name FROM $Table,$STable".
+	  ( "SELECT $Name FROM $Table,$STable".
 	    " WHERE $TableId = $Table.Id".
-	    " AND SongID = $songid" );
+	    " AND $SId = $songid" );
 	my $tag = lc($Table);
 	$tag .= 's' unless $tag =~ /s$/;
 	$meta->[-1]->{$tag} = [ map { $_->[0] } @$ret ]
@@ -132,6 +136,7 @@ foreach ( @$ret ) {
     $std->( qw( Collections CollectionSong ) );
     $std->( qw( Key ) );
     $std->( qw( Signature ) );
+    $std->( qw( SourceType SourceTypeSongs Type ) );
 
     # Tempi.
     $ret = dbh->selectall_arrayref
