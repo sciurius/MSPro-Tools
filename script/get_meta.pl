@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Dec 31 20:39:52 2015
-# Update Count    : 170
+# Last Modified On: Thu Dec 31 21:02:43 2015
+# Update Count    : 175
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -18,7 +18,7 @@ use lib "$FindBin::Bin/../lib";
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( get_meta 0.03 );
+my ($my_name, $my_version) = qw( get_meta 0.04 );
 
 ################ Command line parameters ################
 
@@ -28,6 +28,7 @@ use Getopt::Long 2.13;
 my $dbname = "mobilesheets.db";
 my $output;
 my $songid;
+my $title;
 my $annotations = 0;		# include annotations
 my $verbose = 0;		# verbose processing
 
@@ -63,11 +64,18 @@ db_open( $dbname, { RaiseError => 1, Trace => $trace } );
 
 my $meta = [];
 
-my $ret = dbh->selectall_arrayref( "SELECT Id, Title, SortTitle" .
-				   ",Custom,Custom2" .
-				   " FROM Songs" .
-				   ($songid ? " WHERE Id = $songid" : "") .
-				   " ORDER BY Id" );
+my $sql = "SELECT Id, Title, SortTitle, Custom, Custom2 FROM Songs";
+
+if ( $songid ) {
+    $sql .= " WHERE Id = $songid";
+}
+elsif ( $title ) {
+    $title = '%' . $title . '%' unless $title =~ /[_%]/;
+    $sql .= " WHERE Title LIKE " . dbh->quote($title)
+}
+$sql .= " ORDER BY Id";
+
+my $ret = dbh->selectall_arrayref($sql);
 
 foreach ( @$ret ) {
     my ( $songid, $title, $stitle, $custom, $custom2 ) = @$_;
@@ -313,6 +321,7 @@ sub app_options {
 		   'db=s',	=> \$dbname,
 		   'output=s'	=> \$output,
 		   'songid=i'   => \$songid,
+		   'title=s'    => \$title,
 		   annotations  => \$annotations,
 		   'verbose'	=> \$verbose,
 		   'trace'	=> \$trace,
@@ -369,6 +378,12 @@ Specifies the name of the output file to write the JSON data to.
 Default is standard output.
 
 Print a brief help message and exits.
+
+=item B<--title=>I<text>
+
+Output data only for the songs with titles that match the given
+I<text>. By default it uses a case-independent substring match but you
+can use SQL wildcard characters C<%> and C<_> for flexible searches.
 
 =item B<--songid=>I<id>
 
