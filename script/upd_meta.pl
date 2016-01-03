@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Thu May 28 08:13:56 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jan  3 23:30:00 2016
-# Update Count    : 124
+# Last Modified On: Mon Jan  4 00:00:32 2016
+# Update Count    : 135
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -134,13 +134,13 @@ foreach my $m ( @$meta ) {
 		  " (", $path // "", ")\n") if $trace;
 	    my $attr = {};
 	    # DO NOT UPDATE source and type.
-	    for ( qw( capo transpose ) ) {
+	    for ( qw( enablecapo capo enabletranspose transpose ) ) {
 		next unless $p->{$_};
 		$attr->{$_} = $p->{$_};
 	    }
 	    upd_file( $p->{fileid}, $m->{songid}, $attr ) if %$attr;
 
-	    unless ( $m_attr->{sourcetypes} ) {
+	    unless ( 1 || $m_attr->{sourcetypes} ) {
 		if ( $path =~ /-ptb\.pdf$/ ) {
 		    $m_attr->{sourcetypes} = [ "Chords" ];
 		}
@@ -285,7 +285,8 @@ sub upd_file {
     #  ChordStyle: 0=Plain, 1=Bold,
     #  Encoding: 0=Default(UTF-8), 2=ISO-8859.1
 
-    if ( $attr->{capo} || $attr->{transpose} || $attr->{encoding} ) {
+    if ( defined $attr->{capo} || defined $attr->{transpose} || defined $attr->{encoding}
+	 || defined $attr->{enablecapo} || defined $attr->{enabletranspose} ) {
 	db_insupd( "TextDisplaySettings",
 		   [ qw( FileId SongId FontFamily
 			 TitleSize MetaSize LyricsSize ChordsSize LineSpacing
@@ -296,8 +297,10 @@ sub upd_file {
 		   [ $fileid, $songid, 0,
 		     37, 30, 28, 30, 1.2,
 		     0x00ff00 - 0x1000000, 0x000000 - 0x1000000, 1, 6,
-		     $attr->{transpose} ? ( 1, $attr->{transpose} ) : ( 0, 0 ),
-		     $attr->{capo} ? ( 1, $attr->{capo} ) : ( 0, 0 ),
+		     $attr->{enabletranspose} // 0,
+		     $attr->{transpose} // 0,
+		     $attr->{enablecapo} // 0,
+		     $attr->{capo} // 0,
 		     1, 1, 1, 1, 1,
 		     undef, 0, get_encoding($attr->{encoding}),
 		   ],
