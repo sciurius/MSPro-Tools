@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Thu May 28 08:13:56 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Jan  4 00:00:32 2016
-# Update Count    : 135
+# Last Modified On: Tue Jan  5 14:28:24 2016
+# Update Count    : 152
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -18,7 +18,7 @@ use lib "$FindBin::Bin/../lib";
 # Package name.
 my $my_package = 'Sciurix';
 # Program name and version.
-my ($my_name, $my_version) = qw( upd_meta 0.02 );
+my ($my_name, $my_version) = qw( upd_meta 0.03 );
 
 ################ Command line parameters ################
 
@@ -26,6 +26,7 @@ use Getopt::Long 2.13;
 
 # Command line options.
 my $dbname = "mobilesheets.db";
+my $expert;			# expert mode for unsafe operations
 my $verbose = 0;		# verbose processing
 
 # Development options (not shown with -help).
@@ -69,9 +70,7 @@ foreach my $m ( @$meta ) {
 	# Ok
     }
     elsif ( $m->{title} ) {
-	my $sth = dbh->prepare("SELECT Id FROM Songs WHERE Title = ?");
-	$sth->execute($m->{title});
-	my $ret = $sth->fetchall_arrayref;
+	my $ret = fetch_all( "Songs", [ "Id" ], "Title", $m->{title} );
 	if ( !$ret || @$ret == 0 || @$ret > 1 ) {
 	    warn( "Expecting one match for song \"",
 		  $m->{title}. ", skipped\n");
@@ -102,18 +101,17 @@ foreach my $m ( @$meta ) {
     foreach my $p ( @{ $m->{paths} } ) {
 
 	if ( $p->{fileid} ) {
-	    my $sth = dbh->prepare( "SELECT Path FROM Files WHERE Id = ?" );
-	    $sth->execute($p->{fileid});
-	    my $ret = $sth->fetchall_arrayref;
-	    $p->{path} = $ret->[0][0];
+	    my $ret = fetch_all( "Files", [ "Path" ], "Id", $p->{fileid} );
+	    $p->{path} = $ret->[0][0] if !$p->{path} || !$expert;
 	}
 	elsif ( $p->{path} ) {
 	    my $path = $p->{path};
 	    $path =~ s;^.*/([^/]+)$;$1;;
-	    my $sth = dbh->prepare( "SELECT Id, Path FROM Files WHERE Path = ?" );
-	    $sth->execute($path);
-	    my $ret = $sth->fetchall_arrayref;
+	    my $ret = fetch_all( "Files", [ "Id", "Path" ], "Path", $path );
 	    if ( !$ret || @$ret == 0 ) {
+		my $sql = ( "SELECT Id, Path FROM Files WHERE Path LIKE ?" );
+		MobileSheetsPro::DB::info( $sql, "\%$path\%" );
+		my $sth = dbh->prepare($sql);
 		$sth->execute( "\%$path\%" );
 		$ret = $sth->fetchall_arrayref;
 	    }
@@ -134,7 +132,7 @@ foreach my $m ( @$meta ) {
 		  " (", $path // "", ")\n") if $trace;
 	    my $attr = {};
 	    # DO NOT UPDATE source and type.
-	    for ( qw( enablecapo capo enabletranspose transpose ) ) {
+	    for ( qw( path enablecapo capo enabletranspose transpose ) ) {
 		next unless $p->{$_};
 		$attr->{$_} = $p->{$_};
 	    }
@@ -181,6 +179,26 @@ sub upd_song {
 		[ qw( Id SortTitle ) ],
 		[ $songid, $attr->{sorttitle} ],
 	      );
+    }
+
+    if ( $attr->{artists} ) {
+	db_delall( "ArtistsSongs", [ qw( SongId ) ], [ $songid ] );
+	foreach ( @{ $attr->{artists} } ) {
+	    db_insnodup( "ArtistsSongs",
+			 [ qw( SongId ArtistId ) ],
+			 [ $songid, get_artist($_) ],
+		       );
+	}
+    }
+
+    if ( $attr->{composers} ) {
+	db_delall( "ComposerSongs", [ qw( SongId ) ], [ $songid ] );
+	foreach ( @{ $attr->{composers} } ) {
+	    db_insnodup( "ComposerSongs",
+			 [ qw( SongId ComposerId ) ],
+			 [ $songid, get_composer($_) ],
+		       );
+	}
     }
 
     if ( $attr->{collections} ) {
@@ -249,26 +267,6 @@ sub upd_song {
 	}
     }
 
-    if ( $attr->{artists} ) {
-	db_delall( "ArtistsSongs", [ qw( SongId ) ], [ $songid ] );
-	foreach ( @{ $attr->{artists} } ) {
-	    db_insnodup( "ArtistsSongs",
-			 [ qw( SongId ArtistId ) ],
-			 [ $songid, get_artist($_) ],
-		       );
-	}
-    }
-
-    if ( $attr->{composers} ) {
-	db_delall( "ComposerSongs", [ qw( SongId ) ], [ $songid ] );
-	foreach ( @{ $attr->{composers} } ) {
-	    db_insnodup( "ComposerSongs",
-			 [ qw( SongId ComposerId ) ],
-			 [ $songid, get_composer($_) ],
-		       );
-	}
-    }
-
 }
 
 sub upd_file {
@@ -308,6 +306,25 @@ sub upd_file {
 		 );
     }
 
+    return unless $expert;
+
+    if ( defined $attr->{path} ) {
+	db_upd( "Files",
+		[ qw( Id Path ) ],
+		[ $fileid, $attr->{path} ],
+	      );
+    }
+}
+
+################ Subroutines ################
+
+sub fetch_all {
+    my ( $table, $fields, $key, $value ) = @_;
+    my $sql = "SELECT " . join(",", @$fields) . " FROM $table WHERE $key = ?";
+    MobileSheetsPro::DB::info( $sql, $value ) if $trace;
+    my $sth = dbh->prepare($sql);
+    $sth->execute($value);
+    return $sth->fetchall_arrayref;
 }
 
 ################ Subroutines ################
@@ -328,6 +345,7 @@ sub app_options {
     if ( @ARGV > 0 ) {
 	GetOptions('ident'	=> \$ident,
 		   'db=s',	=> \$dbname,
+		   'expert'	=> \$expert,
 		   'verbose'	=> \$verbose,
 		   'trace'	=> \$trace,
 		   'help|?'	=> \$help,
