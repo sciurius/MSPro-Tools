@@ -155,6 +155,13 @@ sub db_upd($$$;$) {
 	scalar(@$fields) . " fields, " . scalar(@$values) . " values\n" )
       unless @$fields == @$values;
 
+    if ( $table eq "TextDisplaySettings" && $nkey == 2 ) {
+	# The rows in this table seem to spring into existance.
+	my %a;
+	@a{ @$fields } = @$values;
+	db_vfy_textdisplaysettings( $a{FileId}, $a{SongId} );
+    }
+
     my @keys = splice( @$fields, 0, $nkey );
     my $sql = "UPDATE $table SET " .
       join( ", ", map { "$_ = ?" } @$fields ) .
@@ -256,6 +263,45 @@ sub info {
 	$sql =~ s/\?/$t/;
     }
     warn($sql, "\n");
+}
+
+# Structure info: Fields in TextDisplaySettings table.
+# First three fields are Id, FileId and SongId.
+
+sub textdisplayfields {
+    qw( Capo
+	ChordColor ChordHighlight ChordStyle ChordsSize
+	ChorusSize
+	EnableCapo EnableTranpose
+	Encoding
+	FontFamily Key LineSpacing
+	LyricsSize MetaSize
+	NumberChords
+	ShowChords ShowLyrics ShowMeta ShowTabs ShowTitle
+	Structure TabSize TitleSize Transpose TransposeKey );
+}
+
+sub db_vfy_textdisplaysettings {
+    my ( $fileid, $songid ) = @_;
+    my $sql = "SELECT Id FROM TextDisplaySettings WHERE FileId = ? AND SongId = ?";
+    info( $sql, $fileid, $songid ) if $trace;
+    my $ret = $dbh->selectall_arrayref( $sql, {}, $fileid, $songid );
+    return if $ret && $ret->[0];
+    db_ins( "TextDisplaySettings", [ qw( FileId SongId ), textdisplayfields() ],
+	    [ $fileid, $songid,
+	      # NOTE: Most of these 'defaults' are mine :) .
+	      0,
+	      0x000000 - 0x1000000, 0x00ff00 - 0x1000000, 1, 30,
+	      28,
+	      0, 0,
+	      2,
+	      0, 0, 1.2,
+	      28, 30,
+	      6,
+	      1, 1, 1, 1, 1,
+	      undef, 28, 37, 0, 0 ].
+	    2 )
+
 }
 
 =head1 LICENSE

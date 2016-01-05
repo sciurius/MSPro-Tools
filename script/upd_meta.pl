@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Thu May 28 08:13:56 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jan  5 14:28:24 2016
-# Update Count    : 152
+# Last Modified On: Tue Jan  5 16:22:23 2016
+# Update Count    : 156
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -132,7 +132,7 @@ foreach my $m ( @$meta ) {
 		  " (", $path // "", ")\n") if $trace;
 	    my $attr = {};
 	    # DO NOT UPDATE source and type.
-	    for ( qw( path enablecapo capo enabletranspose transpose ) ) {
+	    for ( qw( path enablecapo capo enabletranspose transpose textdisplaysettings ) ) {
 		next unless $p->{$_};
 		$attr->{$_} = $p->{$_};
 	    }
@@ -283,27 +283,22 @@ sub upd_file {
     #  ChordStyle: 0=Plain, 1=Bold,
     #  Encoding: 0=Default(UTF-8), 2=ISO-8859.1
 
-    if ( defined $attr->{capo} || defined $attr->{transpose} || defined $attr->{encoding}
-	 || defined $attr->{enablecapo} || defined $attr->{enabletranspose} ) {
-	db_insupd( "TextDisplaySettings",
-		   [ qw( FileId SongId FontFamily
-			 TitleSize MetaSize LyricsSize ChordsSize LineSpacing
-			 ChordHighlight ChordColor ChordStyle NumberChords
-			 EnableTranpose Transpose EnableCapo Capo
-			 ShowTitle ShowMeta ShowLyrics ShowChords ShowTabs
-			 Structure Key Encoding ) ],
-		   [ $fileid, $songid, 0,
-		     37, 30, 28, 30, 1.2,
-		     0x00ff00 - 0x1000000, 0x000000 - 0x1000000, 1, 6,
-		     $attr->{enabletranspose} // 0,
-		     $attr->{transpose} // 0,
-		     $attr->{enablecapo} // 0,
-		     $attr->{capo} // 0,
-		     1, 1, 1, 1, 1,
-		     undef, 0, get_encoding($attr->{encoding}),
-		   ],
-		   2
-		 );
+    if ( defined $attr->{textdisplaysettings} ) {
+	my $a = $attr->{textdisplaysettings};
+	my @fields;
+	my @values;
+	foreach ( MobileSheetsPro::DB::textdisplayfields() ) {
+	    next unless defined $a->{lc $_};
+	    push( @fields, $_ );
+	    push( @values, $a->{lc $_} );
+	}
+	if ( @fields) {
+	    db_upd( "TextDisplaySettings",
+		    [ qw( FileId SongId ), @fields ],
+		    [ $fileid, $songid, @values ],
+		    2
+		  );
+	}
     }
 
     return unless $expert;

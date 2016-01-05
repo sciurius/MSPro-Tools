@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jan  3 23:59:19 2016
-# Update Count    : 176
+# Last Modified On: Tue Jan  5 16:20:28 2016
+# Update Count    : 184
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -115,14 +115,17 @@ foreach ( @$ret ) {
 	    " FROM TextDisplaySettings".
 	    " WHERE SongId = $songid AND FileId = $fileid" );
 
+	my @fields = MobileSheetsPro::DB::textdisplayfields;
+	$ret = dbh->selectall_arrayref
+	  ( "SELECT " . join(",", @fields) .
+	    " FROM TextDisplaySettings" .
+	    " WHERE SongId = $songid AND FileId = $fileid" );
 	if ( $ret && $ret->[0] ) {
 	    $ret = $ret->[0];
-	    $mp->{capo}		   = $ret->[0] if $ret->[0];
-	    $mp->{enablecapo}	   = $ret->[1] if $ret->[1];
-	    $mp->{transpose}	   = $ret->[2] if $ret->[2];
-	    $mp->{enabletranspose} = $ret->[3] if $ret->[3];
+	    foreach ( @fields ) {
+		$mp->{textdisplaysettings}->{lc $_} = shift(@$ret);
+	    }
 	}
-
     }
 
     my $std = sub {
