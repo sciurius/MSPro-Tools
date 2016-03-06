@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Jan  4 23:19:47 2016
-# Update Count    : 228
+# Last Modified On: Sun Mar  6 20:58:24 2016
+# Update Count    : 260
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -27,7 +27,8 @@ use Getopt::Long 2.13;
 my $msbfile = "MobileSheetsProBackup.msb";
 my $zipfile;
 my $ann = 1;			# process annotations
-my $verbose = 0;		# verbose processing
+my $check = 1;			# check integrity only
+my $verbose = 1;		# verbose processing
 
 # Development options (not shown with -help).
 my $debug = 0;			# debugging
@@ -39,7 +40,9 @@ app_options();
 
 # Post-processing.
 $msbfile = shift if @ARGV == 1;
-$trace |= ($debug || $test);
+$trace ||= ($debug || $test);
+$verbose ||= $trace;
+$verbose = 9 if $debug;
 
 ################ Presets ################
 
@@ -92,7 +95,7 @@ my $EOF_SENTINEL = "\xff" x 8;
 
 my $msb = MSB->new->open($msbfile);
 warn("Reading MobileSheetsPro backup set version ",
-     $msb->version, "\n") if $debug;
+     $msb->version, "\n") if $verbose;
 
 # For zip output.
 $msb->zip( Archive::Zip->new ) if $zipfile;
@@ -106,6 +109,7 @@ $msb->handle_database( "mobilesheets.db" );
 
 my $len;
 my $file = 0;
+my %seen;
 
 while ( my $n = $msb->read(8) ) {
 
@@ -120,20 +124,21 @@ while ( my $n = $msb->read(8) ) {
     while ( my $info = shift( @{ $msb->dbfiles } )  ) {
 	my ( $path, $mtime, $sz ) = @$info;
 	unless ( $path ) {
-	    warn("Song $songid, not included\n") if $debug;
+	    warn("Song $songid, not included\n") if $verbose > 1;
 	    last;
 	}
 	$mtime = int( $mtime/1000 );
 	my $len = $msb->read(8);
 	warn( "Song $songid, path = $path, size = $sz, mtime = $mtime (" .
 	      localtime($mtime) . ")\n" )
-	  if $verbose;
+	  if $verbose > 1;
 
 	if ( !$len ) {
 	    # Placeholder for files not physically present in the backup set.
-	    warn("Placeholder: $path\n") if $debug;
+	    warn("Placeholder: $path\n") if $verbose > 1;
 	    next;
 	}
+	$seen{$path}++;
 
 	# This is puzzling. Sometimes I see two songs that refer to
 	# the same physical file. Apparently two versions. Both
@@ -147,12 +152,13 @@ while ( my $n = $msb->read(8) ) {
 
 	if ( $msb->zip ) {
 	    # Store into zip.
-	    warn("AddString: $path\n");
-	    local $Archive::Zip::UNICODE = 1;
+	    warn("AddString: $path\n") if $verbose;
+	    local $Archive::Zip::UNICODE;
+	    $Archive::Zip::UNICODE = 1;
 	    my $m = $msb->zip->addString( $buf, $path, COMPRESSION_STORED );
 	    $m->setLastModFileDateTimeFromUnix($mtime);
 	}
-	else {
+	elsif ( !$check) {
 	    # Make file name and create it.
 	    my $fn = $path;
 	    $path =~ s;^.*/;;;
@@ -163,6 +169,10 @@ while ( my $n = $msb->read(8) ) {
 }
 
 END {
+    foreach ( sort keys %seen ) {
+	warn("Missing file: $_\n") unless $seen{$_} > 0;
+    }
+
     if ( $msb && $msb->zip ) {
 	warn("$zipfile: Write error\n")
 	  unless $msb->zip->writeToFileNamed($zipfile) == AZ_OK;
@@ -265,21 +275,32 @@ sub zip {
 sub handle_preferences {
     my ( $self ) = @_;
     my $items = $self->read(4);
-    warn("Number of pref items = $items\n") if $debug;
+    warn("Preferences: $items items\n") if $verbose;
     for my $i ( 0..$items-1 ) {
 	my $len = $self->read(2);
 	my $path = $self->readstring($len) . ".xml";
-	warn("Pref item: $path\n") if $debug;
+	warn("Pref item: $path\n") if $verbose > 1;
 	$len = $self->read(8);
 	$self->readbuf( \my $data, $len );
-#	warn("item: ", substr($data, 0, 20), "...\n");
+	warn("item: ", substr($data, 0, 20), "...\n") if $debug;
+
+	# Verify <?xml ...> header.
+	unless ( $data =~ /^\<\?xml\b.*\>/ ) {
+	    warn("Pref item: $path -- Missing <?xml> header\n");
+	}
+
+	# Verify <map>...</map> or <map/> content.
+	unless ( $data =~ /^.*\n\<map\s*\/\>\s*$/
+		 or $data =~ /^.*\n\<map\>(?:.|\n)*\<\/map\>\s*$/ ) {
+	    warn("Pref item: $path -- Missing <map> content\n");
+	}
 
 	if ( $self->zip ) {
 	    # Store into zip.
-	    warn("AddString: $path\n");
+	    warn("AddString: $path\n") if $verbose > 1;
 	    my $m = $self->zip->addString( $data, $path, COMPRESSION_STORED );
 	}
-	else {
+	elsif ( !$check ) {
 	    ::create_file( $path, $data, $len );
 	}
     }
@@ -289,7 +310,7 @@ sub handle_database {
     my ( $self, $dbfile ) = @_;
 
     my $len = $self->read(8);
-    warn( "Database length = $len\n" ) if $debug;
+    warn( "Database length = $len\n" ) if $verbose > 2;
 
     my $path = $dbfile;
     $path =~ s;^.*/;;;
@@ -300,11 +321,12 @@ sub handle_database {
 
     # We need a disk file for SQLite, so store the database
     # in a temp file.
-    if ( $self->zip ) {
+    if ( $check || $self->zip ) {
 	# Add to the zip.
 	$dbfile = Archive::Zip::tempFile;
 	::create_file( $dbfile, $buf );
-	$self->zip->addFile( $dbfile, $path, COMPRESSION_DEFLATED );
+	$self->zip->addFile( $dbfile, $path, COMPRESSION_DEFLATED )
+	  unless $check;
     }
     else {
 	::create_file( $dbfile, $buf );
@@ -313,7 +335,19 @@ sub handle_database {
     eval {
 	$self->{dbh} = DBI::->connect( "dbi:SQLite:dbname=$dbfile", "", "",
 				       { sqlite_unicode => 1 } );
-    };
+	1;
+    } or warn("DATABASE IS POSSIBLY CORRUPT\n");
+
+    foreach $file ( @{ $self->{dbh}->selectall_arrayref("SELECT Id,Path,Type FROM Files") } ) {
+	next if $file->[2] == 5; # placeholder
+	$seen{$file->[1]} = 0;
+	warn("File ", $file->[0], " has no path?\n") unless $file->[1];
+    }
+    foreach $file ( @{ $self->{dbh}->selectall_arrayref("SELECT Id,File FROM AudioFiles") } ) {
+	$seen{$file->[1]} = 0;
+    }
+    warn("Datatase: ", scalar(keys(%seen)), " file entries\n")
+      if $verbose;
 }
 
 sub get_dbfiles {
@@ -335,7 +369,8 @@ sub get_dbfiles {
     while ( my $rr = $sth->fetch ) {
 	push( @{ $self->{dbfiles} }, [ @$rr ] );
     }
-    warn( "DB files: $i + ", @{ $self->{dbfiles} }-$i, " audio\n" ) if $debug;
+    warn( "DB files: $i + ", @{ $self->{dbfiles} }-$i, " audio\n" )
+      if $verbose > 2;
 }
 
 sub dbfiles {
@@ -363,8 +398,10 @@ sub app_options {
     # Process options.
     if ( @ARGV > 0 ) {
 	GetOptions('zip=s'	=> \$zipfile,
+		   'check'	=> \$check,
 		   'ident'	=> \$ident,
-		   'verbose'	=> \$verbose,
+		   'verbose+'	=> \$verbose,
+		   'quiet'	=> sub { $verbose = 0 },
 		   'trace'	=> \$trace,
 		   'help|?'	=> \$help,
 		   'man'	=> \$man,
@@ -378,6 +415,7 @@ sub app_options {
 	$pod2usage->(1) if $help;
 	$pod2usage->(VERBOSE => 2) if $man;
     }
+    $pod2usage->(2) if $zipfile && $check;
 }
 
 __END__
@@ -394,10 +432,12 @@ msb_unpack [options] file
 
  Options:
    --zip=XXX		produce a zip
+   --check		integrity check only
    --ident		show identification
    --help		brief help message
    --man                full documentation
-   --verbose		verbose information
+   --verbose		more verbose information
+   --quiet		run as quietly as possible
 
 =head1 OPTIONS
 
@@ -407,6 +447,12 @@ msb_unpack [options] file
 
 Instead of unpacking everything into the current directory, produces a
 zip file containing everything. Experimental.
+
+=item B<--check>
+
+Checks integrity only. Does not extract files.
+
+This option cannot be used together with the B<--zip> option.
 
 =item B<--help>
 
@@ -424,6 +470,10 @@ Prints program identification.
 
 More verbose information. In particular, the song number for each
 entry is reported.
+
+=item B<--quiet>
+
+Runs as quietly as possible.
 
 =item I<file>
 
