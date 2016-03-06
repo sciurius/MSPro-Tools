@@ -16,6 +16,7 @@ my $trace = 0;
 our @EXPORT= qw( dbh db_open db_ins db_upd db_insupd db_insnodup
 		 db_delall lookup
 		 get_sourcetype get_genre get_collections get_key
+		 get_collection get_setlist
 		 get_tempo get_signature get_artist get_composer
 		 get_encoding );
 
@@ -47,6 +48,12 @@ sub get_genre {
 my %collections;
 sub get_collections {
     $collections{$_[0]} //= get__id( "Collections", "Name", $_[0] );
+}
+sub get_collection { goto \&get_collections }
+
+my %setlists;
+sub get_setlist {
+    $setlists{$_[0]} //= get__id( "Setlists", "Name", $_[0] );
 }
 
 my %key;
