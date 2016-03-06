@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun 12 21:10:33 2015
-# Update Count    : 480
+# Last Modified On: Sat Jun 20 19:46:34 2015
+# Update Count    : 482
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -269,8 +269,10 @@ sub flatten_song {
 
 		while ( @$r ) {
 		    my ( $x, $y ) = splice( @$r, 0, 2 );
-		    if ( $x > 10000 && $y > 10000 ) {
+		    if ( $x > 100000 && $y > 100000 ) { # MAX_FLOATs
 			if ( @points ) {
+			    # Finish stroke at next point.
+			    push( @points, splice( @$r, 0, 2 ) );
 			    warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f ...\n",
 					   @points[0..3] ) ) if $debug;
 			    $gfx->poly(@points);
@@ -278,9 +280,10 @@ sub flatten_song {
 			    $gfx->endpath;
 			    @points = ();
 			}
+			else {
+			    warn( "page $curpage, poly EMPTY\n" );
+			}
 			( $px, $py ) = ( -1, -1 );
-			# Next point is the same, so ignore it.
-			splice( @$r, 0, 2 );
 			next;
 		    }
 
@@ -289,8 +292,8 @@ sub flatten_song {
 		    push( @points, $x, $y );
 		}
 		if ( @points ) {
-		    warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f ...\n",
-				   @points[0..3] ) ) if $debug;
+		    warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f ... UNFINISHED\n",
+				   @points[0..3] ) );
 		    $gfx->poly(@points);
 		    $gfx->stroke;
 		}
