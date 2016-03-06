@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Nov  6 17:08:31 2015
-# Update Count    : 220
+# Last Modified On: Mon Jan  4 23:19:47 2016
+# Update Count    : 228
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -50,6 +50,7 @@ my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 use Fcntl qw( SEEK_CUR O_RDONLY O_WRONLY O_CREAT );
 use DBI;
 use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
+use Encode;
 
 # MSB File Format, as told by Mike.
 #
@@ -147,6 +148,7 @@ while ( my $n = $msb->read(8) ) {
 	if ( $msb->zip ) {
 	    # Store into zip.
 	    warn("AddString: $path\n");
+	    local $Archive::Zip::UNICODE = 1;
 	    my $m = $msb->zip->addString( $buf, $path, COMPRESSION_STORED );
 	    $m->setLastModFileDateTimeFromUnix($mtime);
 	}
@@ -309,7 +311,8 @@ sub handle_database {
     }
     # Connect to SQLite database.
     eval {
-	$self->{dbh} = DBI::->connect( "dbi:SQLite:dbname=$dbfile", "", "" );
+	$self->{dbh} = DBI::->connect( "dbi:SQLite:dbname=$dbfile", "", "",
+				       { sqlite_unicode => 1 } );
     };
 }
 
