@@ -19,7 +19,8 @@ information.
 
 msb_unpack.pl
 
-This tool unpacks a MSPro backup set into the current directory.
+This tool verifies and/or unpacks a MSPro backup set into the current
+directory.
 
 Usage:
 
@@ -33,7 +34,6 @@ Usage:
   The contents of the backup set will be extracted. All files will be
   extracted into the current directory, folder information will not be
   included. 
-
 
 flatten.pl
 
@@ -83,10 +83,12 @@ Usage
 	  "tempo"       : [ 92 ],
 	  "keys"        : [ "C" ],
 	  "signatures"  : [ "3/4" ],
+	  "songid"	: 621,
 	  "paths"       : [
 	     {
-		"path" : "/storage/sdcard1/Music/013_The_Old_Triangle.pdf"
-		"type" : "PDF",
+		"path"   : "/storage/sdcard1/Music/013_The_Old_Triangle.pdf"
+		"fileid" : 1412,
+		"type"   : "PDF",
 		"source" : "Sheet Music",
 	     }
 	  ],
@@ -105,9 +107,24 @@ Usage
   (Note: You may need to adjust the path to perl and the script if
   they are not accessible from the current directory.)
 
-  Songs are identified by the filename without the leading path, e.g.
-  a path "/storage/sdcard1/Music/013_The_Old_Triangle.pdf" will search
-  the database for a file entry ending in "013_The_Old_Triangle.pdf".
+  Songs are identified by the SongId and paths by the FileId. If
+  either is missing, songs are searched for using the filename without
+  the leading path, e.g. a path
+  "/storage/sdcard1/Music/013_The_Old_Triangle.pdf" will search the
+  database for a file entry ending in "013_The_Old_Triangle.pdf".
+
+  NOTE: You can extract the metadata using get_meta, and selectivily
+  extract portions that you want to update. For example, this snippet
+  will only change the title of song 621:
+
+       {
+	  "songid"   : 621,
+	  "title"    : "The Old Triangle (Instrumental)",
+       }
+
+  NOTE: When a new value is given to a list-valued item (key,
+  collection, artist, etc.) the value is overwritten and the old content is
+  lost.
 
   WARNING: You need to copy the MobileSheetsPro database from the
   tablet to the PC, run this program, and then copy the (modified)
