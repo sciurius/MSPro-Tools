@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jan  5 16:20:28 2016
-# Update Count    : 184
+# Last Modified On: Wed Jan  6 14:39:23 2016
+# Update Count    : 185
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -91,12 +91,13 @@ foreach ( @$ret ) {
 	  } );
 
     my $ret = dbh->selectall_arrayref( "SELECT Id, Path, Source, Type" .
+				       ", PageOrder" .
 				       " FROM Files" .
 				       " WHERE SongID = $songid".
 				       " ORDER BY Id" );
 
     foreach ( @$ret ) {
-	my ( $fileid, $path, $source, $type ) = @$_;
+	my ( $fileid, $path, $source, $type, $pageorder ) = @$_;
 	warn( "Path[$fileid]: $path\n" ) if $trace;
 
 	my $mp =
@@ -105,6 +106,7 @@ foreach ( @$ret ) {
 	    # Source is where the file is located. Currently always 1 (scdard).
 	    source => $sources[1+$source] // $source,
 	    type   => $filetypes[$type] // $type,
+	    $pageorder ? ( pageorder => $pageorder ) : (),
 	  };
 	push( @{ $meta->[-1]->{paths} }, $mp );
 
