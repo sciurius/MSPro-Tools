@@ -653,6 +653,7 @@ CREATE TABLE TextDisplaySettings
    ShowTabs INTEGER,
    Structure VARCHAR(255),	-- unused?
    Key INTEGER,
+   -- UTF-8, ASCII, ISO-8859.1, UTF-16BE, UTF-16LE, windows-1251, windows-1256
    Encoding INTEGER
  );
 CREATE INDEX text_display_id_idx ON TextDisplaySettings(SongId);
