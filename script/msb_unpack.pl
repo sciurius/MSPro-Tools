@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Mar  6 20:58:24 2016
-# Update Count    : 260
+# Last Modified On: Mon Mar 14 10:13:01 2016
+# Update Count    : 261
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -27,7 +27,7 @@ use Getopt::Long 2.13;
 my $msbfile = "MobileSheetsProBackup.msb";
 my $zipfile;
 my $ann = 1;			# process annotations
-my $check = 1;			# check integrity only
+my $check = 0;			# check integrity only
 my $verbose = 1;		# verbose processing
 
 # Development options (not shown with -help).
