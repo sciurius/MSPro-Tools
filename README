@@ -19,7 +19,7 @@ information.
 
 msb_unpack.pl
 
-This tool verifies and/or unpacks a MSPro backup set into the current
+This tool verifies and/or unpacks an MSPro backup set into the current
 directory.
 
 Usage:
@@ -34,6 +34,26 @@ Usage:
   The contents of the backup set will be extracted. All files will be
   extracted into the current directory, folder information will not be
   included. 
+
+msb_relocate.pl
+
+This tool copies an MSPro backup set, changing path prefixes,
+effectively relocating the backup set to be restored to a new
+location.
+
+Usage:
+
+  Copy the backup set from the tablet onto the PC.
+
+  perl script/msb_reloc.pl MobileSheetsProBackup.msb
+
+  (Note: You may need to adjust the path to perl, the script and the
+  backup set if they are not accessible from the current directory.)
+
+  The new backup set will be called MobileSheetsProBackup_reloc.msb.
+  You can verify its contents with msb_unpack.
+  If the relocation is okay, copy the new backup set to the (new)
+  tablet and restore it.
 
 flatten.pl
 
