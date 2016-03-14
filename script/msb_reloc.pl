@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Mon Mar 14 08:32:12 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Mar 14 10:39:18 2016
-# Update Count    : 33
+# Last Modified On: Mon Mar 14 14:26:08 2016
+# Update Count    : 36
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use warnings;
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( msb_reloc 0.01 );
+my ($my_name, $my_version) = qw( msb_reloc 0.02 );
 
 ################ Command line parameters ################
 
@@ -385,7 +385,14 @@ sub handle_database {
     }
     warn("Datatase: ", scalar(keys(%seen)), " file entries\n")
       if $verbose;
-#    $self->{dbh}->disconnect;
+
+    # Flush changes and reopen readonly.
+    $self->{dbh}->disconnect;
+    $self->{dbh} = DBI::->connect( "dbi:SQLite:dbname=$dbfile", "", "",
+				   { sqlite_unicode => 1,
+				     sqlite_open_flags => 1,
+				   } );
+
     $len = -s $dbfile;
     $self->write( $len, 8 );
     sysopen( my $fi, $dbfile, O_RDONLY )
