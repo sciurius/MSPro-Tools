@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Mar 14 10:13:01 2016
-# Update Count    : 261
+# Last Modified On: Mon Mar 14 13:16:26 2016
+# Update Count    : 262
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -340,10 +340,11 @@ sub handle_database {
 
     foreach $file ( @{ $self->{dbh}->selectall_arrayref("SELECT Id,Path,Type FROM Files") } ) {
 	next if $file->[2] == 5; # placeholder
+	warn("File ", $file->[0], " has no path?\n"), next unless $file->[1];
 	$seen{$file->[1]} = 0;
-	warn("File ", $file->[0], " has no path?\n") unless $file->[1];
     }
     foreach $file ( @{ $self->{dbh}->selectall_arrayref("SELECT Id,File FROM AudioFiles") } ) {
+	warn("File ", $file->[0], " has no path?\n"), next unless $file->[1];
 	$seen{$file->[1]} = 0;
     }
     warn("Datatase: ", scalar(keys(%seen)), " file entries\n")
