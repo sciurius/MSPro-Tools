@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Mon Mar 14 08:32:12 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Mar 14 14:26:08 2016
-# Update Count    : 36
+# Last Modified On: Mon Mar 14 23:46:48 2016
+# Update Count    : 38
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use warnings;
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( msb_reloc 0.02 );
+my ($my_name, $my_version) = qw( msb_reloc 0.03 );
 
 ################ Command line parameters ################
 
@@ -349,7 +349,7 @@ sub handle_database {
     my $db;
     ( $db, $dbfile ) = tempfile();
     ::create_file( $db, $dbfile, $buf );
-    warn($dbfile);
+    warn("Using temporary database $dbfile\n") if $verbose;
     $db->close;
     # Connect to SQLite database.
     eval {
@@ -357,6 +357,7 @@ sub handle_database {
 				       { sqlite_unicode => 1 } );
 	1;
     } or warn("DATABASE IS POSSIBLY CORRUPT\n");
+    warn("Database $dbfile has been opened\n") if $verbose;
 
     foreach $file ( @{ $self->{dbh}->selectall_arrayref("SELECT Id,Path,Type FROM Files") } ) {
 	next if $file->[2] == 5; # placeholder
