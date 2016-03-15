@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Mon Mar 14 08:32:12 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Mar 15 11:47:04 2016
-# Update Count    : 49
+# Last Modified On: Tue Mar 15 20:12:20 2016
+# Update Count    : 55
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -28,7 +28,6 @@ my $msbfile = "MobileSheetsProBackup.msb";
 my $newmsbfile = "MobileSheetsProBackup_reloc.msb";
 my $srcpath;
 my $dstpath;
-my $check = 1;			# check integrity only
 my $verbose = 1;		# verbose processing
 
 # Development options (not shown with -help).
@@ -127,13 +126,14 @@ while ( my $n = $msb->read(8) ) {
 	    warn("Song $songid, not included\n") if $verbose > 1;
 	    last;
 	}
-	$mtime = int( $mtime/1000 );
-	my $len = $msb->read(8);
-	$msb->write( $len, 8 );
 	warn( "Song $songid, path = $path, size = $sz, mtime = $mtime (" .
 	      localtime($mtime) . ")\n" )
 	  if $verbose > 1;
+	next if $sz == 0;
 
+	$mtime = int( $mtime/1000 );
+	my $len = $msb->read(8);
+	$msb->write( $len, 8 );
 	if ( !$len ) {
 	    # Placeholder for files not physically present in the backup set.
 	    warn("Placeholder: $path\n") if $verbose > 1;
@@ -160,9 +160,13 @@ END {
 	$msb->{ofd}->close;
 	undef $msb;
     }
+    my $missing = 0;
     foreach ( sort keys %seen ) {
-	warn("Missing file: $_\n") unless $seen{$_} > 0;
+	next if $seen{$_} > 0;
+	$missing++;
+	# warn("Missing file: $_\n");
     }
+    warn("Number of missing files = $missing\n") if $missing;
 }
 
 ################ Subroutines ################
@@ -432,7 +436,8 @@ sub get_dbfiles {
     while ( my $rr = $sth->fetch ) {
 	push( @{ $self->{dbfiles} }, [ @$rr ] );
     }
-    warn( "DB files: $i + ", @{ $self->{dbfiles} }-$i, " audio\n" )
+    warn( "DB files for song $songid: $i + ",
+	  @{ $self->{dbfiles} }-$i, " audio\n" )
       if $verbose > 2;
 }
 
@@ -462,7 +467,6 @@ sub app_options {
     if ( @ARGV > 0 ) {
 	GetOptions('src=s'	=> \$srcpath,
 		   'dst=s'	=> \$dstpath,
-		   'check'	=> \$check,
 		   'ident'	=> \$ident,
 		   'verbose+'	=> \$verbose,
 		   'quiet'	=> sub { $verbose = 0 },

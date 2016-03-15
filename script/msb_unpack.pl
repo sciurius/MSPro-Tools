@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Mar 15 11:46:40 2016
-# Update Count    : 264
+# Last Modified On: Tue Mar 15 20:08:08 2016
+# Update Count    : 265
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use warnings;
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( msb_unpack 0.11 );
+my ($my_name, $my_version) = qw( msb_unpack 0.12 );
 
 ################ Command line parameters ################
 
@@ -127,12 +127,13 @@ while ( my $n = $msb->read(8) ) {
 	    warn("Song $songid, not included\n") if $verbose > 1;
 	    last;
 	}
-	$mtime = int( $mtime/1000 );
-	my $len = $msb->read(8);
 	warn( "Song $songid, path = $path, size = $sz, mtime = $mtime (" .
 	      localtime($mtime) . ")\n" )
 	  if $verbose > 1;
+	next if $sz == 0;
 
+	$mtime = int( $mtime/1000 );
+	my $len = $msb->read(8);
 	if ( !$len ) {
 	    # Placeholder for files not physically present in the backup set.
 	    warn("Placeholder: $path\n") if $verbose > 1;
