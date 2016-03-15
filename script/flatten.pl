@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun  9 17:25:12 2015
-# Update Count    : 263
+# Last Modified On: Tue Mar 15 20:31:25 2016
+# Update Count    : 265
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -18,7 +18,7 @@ use lib "$FindBin::Bin/../lib";
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( flatten 0.11 );
+my ($my_name, $my_version) = qw( flatten 0.12 );
 
 ################ Command line parameters ################
 
@@ -148,8 +148,9 @@ flatten - process MSPro annotations
 flatten [options]
 
  Options:
-   --songid=NN		selects a single song by number
+   --song=NN		selects a single song by number
    --songsrc=XXX	explicitly specifies a source document
+   --songpdf=XXX	explicitly specifies a source document
    --output=XXX		explicitly specifies the output PDF
    --db=XXX		the MSPro database (default mobilesheets.db)
    --ident		show identification

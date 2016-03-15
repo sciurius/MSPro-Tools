@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jun 20 19:46:34 2015
-# Update Count    : 482
+# Last Modified On: Tue Mar 15 20:21:52 2016
+# Update Count    : 483
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -52,7 +52,7 @@ sub flatten_song {
     my $r;
     my $xparent = 0;		# document with alpha
 
-    my $title = lookup( qw( Songs Title ), $songid );
+    my $title = lookup( "Songs", "Title", $songid );
     die("Unknown song $songid\n") unless $title;
     warn("Processing song \"$title\"\n") if $verbose;
 
