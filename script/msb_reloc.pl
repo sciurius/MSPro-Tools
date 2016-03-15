@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Mon Mar 14 08:32:12 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Mar 14 23:46:48 2016
-# Update Count    : 38
+# Last Modified On: Tue Mar 15 08:13:04 2016
+# Update Count    : 39
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -550,7 +550,7 @@ The relocated backup set will be written to C<MobileSheetsProBackup_reloc.msb>.
 
 =head1 DESCRIPTION
 
-B<msb_rewrite> will copy the contents of the given backup into a new
+B<msb_reloc> will copy the contents of the given backup into a new
 backup set. The new set will be identical to the old one, except that
 in the database all path names have been changed according to the
 B<--src> and B<--dst> arguments.
