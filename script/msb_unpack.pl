@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Mar 14 13:16:26 2016
-# Update Count    : 262
+# Last Modified On: Tue Mar 15 11:46:40 2016
+# Update Count    : 264
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use warnings;
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( msb_unpack 0.10 );
+my ($my_name, $my_version) = qw( msb_unpack 0.11 );
 
 ################ Command line parameters ################
 
@@ -279,8 +279,8 @@ sub handle_preferences {
     for my $i ( 0..$items-1 ) {
 	my $len = $self->read(2);
 	my $path = $self->readstring($len) . ".xml";
-	warn("Pref item: $path\n") if $verbose > 1;
 	$len = $self->read(8);
+	warn("Pref item: $path ($len)\n") if $verbose > 1;
 	$self->readbuf( \my $data, $len );
 	warn("item: ", substr($data, 0, 20), "...\n") if $debug;
 
