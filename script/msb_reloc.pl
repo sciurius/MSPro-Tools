@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Mon Mar 14 08:32:12 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Mar 15 08:13:04 2016
-# Update Count    : 39
+# Last Modified On: Tue Mar 15 11:47:04 2016
+# Update Count    : 49
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use warnings;
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( msb_reloc 0.03 );
+my ($my_name, $my_version) = qw( msb_reloc 0.04 );
 
 ################ Command line parameters ################
 
@@ -248,10 +248,7 @@ sub write {
     my ( $self, $value, $len ) = @_;
     my $buf;
     if ( $len == 8 ) {
-	my @a;
-	$a[1] = $value & 0xffffffff;
-	$a[0] = ($value >> 32 ) & 0xffffffff;
-	$buf = pack( "NN", @a );
+	$buf = eval { pack( "Q>", $value ) } || "\0\0\0\0".pack("N", $value);
     }
     elsif ( $len == 4 ) {
 	$buf = pack( "N", $value );
@@ -313,7 +310,7 @@ sub handle_preferences {
     for my $i ( 0..$items-1 ) {
 	my $len = $self->read(2);
 	my $path = $self->readstring($len) . ".xml";
-	warn("Pref item: $path\n") if $verbose > 1;
+	warn("Pref item: $path ($len)\n") if $verbose > 1;
 	$self->write( $len, 2 );
 	$self->writestring( $path, $len );
 	$len = $self->read(8);
@@ -352,19 +349,20 @@ sub handle_database {
     warn("Using temporary database $dbfile\n") if $verbose;
     $db->close;
     # Connect to SQLite database.
-    eval {
-	$self->{dbh} = DBI::->connect( "dbi:SQLite:dbname=$dbfile", "", "",
-				       { sqlite_unicode => 1 } );
-	1;
-    } or warn("DATABASE IS POSSIBLY CORRUPT\n");
+    $self->{dbh} = DBI::->connect( "dbi:SQLite:dbname=$dbfile", "", "",
+				   { sqlite_unicode => 1 } );
     warn("Database $dbfile has been opened\n") if $verbose;
 
+    my $tally = 0;
+    my $rr = 0;
     foreach $file ( @{ $self->{dbh}->selectall_arrayref("SELECT Id,Path,Type FROM Files") } ) {
+	$tally++;
 	next if $file->[2] == 5; # placeholder
 	warn("File ", $file->[0], " has no path?\n"), next unless $file->[1];
 	my $fn = $file->[1];
 	if ( $srcpath && $srcpath eq substr($fn, 0, length($srcpath)) ) {
 	    $fn = $dstpath . substr($fn, length($srcpath));
+	    $rr++;
 	}
 	$seen{$fn} = 0;
 	if ( $fn ne $file->[1] ) {
@@ -373,10 +371,12 @@ sub handle_database {
 	}
     }
     foreach $file ( @{ $self->{dbh}->selectall_arrayref("SELECT Id,File FROM AudioFiles") } ) {
+	$tally++;
 	warn("File ", $file->[0], " has no path?\n"), next unless $file->[1];
 	my $fn = $file->[1];
 	if ( $srcpath && $srcpath eq substr($fn, 0, length($srcpath)) ) {
 	    $fn = $dstpath . substr($fn, length($srcpath));
+	    $rr++;
 	}
 	$seen{$fn} = 0;
 	if ( $fn ne $file->[1] ) {
@@ -384,7 +384,7 @@ sub handle_database {
 			     $fn, $file->[0]);
 	}
     }
-    warn("Datatase: ", scalar(keys(%seen)), " file entries\n")
+    warn("Datatase: $tally file entries, $rr have been relocated\n")
       if $verbose;
 
     # Flush changes and reopen readonly.
@@ -393,6 +393,7 @@ sub handle_database {
 				   { sqlite_unicode => 1,
 				     sqlite_open_flags => 1,
 				   } );
+    warn("Database $dbfile has been reopened\n") if $verbose;
 
     $len = -s $dbfile;
     $self->write( $len, 8 );
