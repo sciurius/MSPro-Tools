@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Tue Mar 15 07:50:53 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Mar 15 08:12:34 2016
-# Update Count    : 11
+# Last Modified On: Tue Mar 15 17:34:05 2016
+# Update Count    : 24
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use warnings;
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( db_reloc 0.01 );
+my ($my_name, $my_version) = qw( db_reloc 0.02 );
 
 ################ Command line parameters ################
 
@@ -58,16 +58,23 @@ my $dbh = DBI::->connect( "dbi:SQLite:dbname=$dbfile", "", "",
 			    sqlite_open_readonly => 1,
 			  } );
 $dbh->sqlite_backup_to_file($newdbfile);
-warn("Database $dbfile has been copied to $newdbfile\n") if $verbose;
+warn("Database $dbfile has been copied to $newdbfile\n")
+  if $verbose;
+
 $dbh = DBI::->connect( "dbi:SQLite:dbname=$newdbfile", "", "",
 		       { sqlite_unicode => 1,
 		       } );
 warn("Database $newdbfile has been reopened\n") if $verbose;
 
+my $res = $dbh->selectall_arrayref("SELECT count(*) FROM Files", {});
+warn("Processing $res->[0]->[0] file entries...\n")
+  if $verbose;
+
 my $tally = 0;
 my $rr = 0;
-my $file;
-foreach $file ( @{ $dbh->selectall_arrayref("SELECT Id,Path,Type FROM Files") } ) {
+my $sth = $dbh->prepare("SELECT Id,Path,Type FROM Files");
+$sth->execute;
+while ( my $file = $sth->fetch ) {
     $tally++;
     next if $file->[2] == 5; # placeholder
     warn("File ", $file->[0], " has no path?\n"), next unless $file->[1];
@@ -79,9 +86,18 @@ foreach $file ( @{ $dbh->selectall_arrayref("SELECT Id,Path,Type FROM Files") } 
 	$dbh->do("UPDATE Files SET Path = ? WHERE Id = ?", {},
 		 $fn, $file->[0]);
 	$rr++;
+	warn("Reloc $rr/$tally...\n")
+	  if $verbose && $rr % 100 == 0;
     }
 }
-foreach $file ( @{ $dbh->selectall_arrayref("SELECT Id,File FROM AudioFiles") } ) {
+
+$res = $dbh->selectall_arrayref("SELECT count(*) FROM AudioFiles", {});
+warn("Processing $res->[0]->[0] audiofile entries...\n")
+  if $verbose;
+
+$sth = $dbh->prepare("SELECT Id,File FROM AudioFiles");
+$sth->execute;
+while ( my $file = $sth->fetch ) {
     $tally++;
     warn("File ", $file->[0], " has no path?\n"), next unless $file->[1];
     my $fn = $file->[1];
@@ -92,8 +108,11 @@ foreach $file ( @{ $dbh->selectall_arrayref("SELECT Id,File FROM AudioFiles") } 
 	$dbh->do("UPDATE AudioFiles SET File = ? WHERE Id = ?", {},
 			 $fn, $file->[0]);
 	$rr++;
+	warn("Reloc $rr/$tally...\n")
+	  if $verbose && $rr % 100 == 0;
     }
 }
+
 warn("Datatase $newdbfile: $tally file entries, $rr have been relocated\n")
   if $verbose;
 
