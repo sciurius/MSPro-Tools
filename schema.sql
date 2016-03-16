@@ -1,5 +1,5 @@
 -- Schema for MobileSheetsPro database.
--- Version: MobileSheetsPro 1.0.7
+-- Version: MobileSheetsPro 1.4.0
 
 PRAGMA foreign_keys=OFF;
 
@@ -25,7 +25,8 @@ CREATE TABLE Songs
    SharpenLevel INTEGER DEFAULT 4,
    CreationDate INTEGER DEFAULT 0,
    LastModified INTEGER DEFAULT 0,
-   Keywords VARCHAR(255) DEFAULT ''
+   Keywords VARCHAR(255) DEFAULT '',
+   AutoStartAudio INTEGER DEFAULT 0
  );
 
 -- MIDI data.
@@ -58,7 +59,8 @@ CREATE INDEX midi_sysex_midi_id_idx ON MidiSysex(MidiId);
 
 CREATE TABLE SourceType
  ( Id INTEGER PRIMARY KEY,
-   Type VARCHAR(255)
+   Type VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 INSERT INTO SourceType VALUES(1, 'Sheet Music');
 INSERT INTO SourceType VALUES(2, 'Tab');
@@ -80,7 +82,8 @@ CREATE INDEX srctype_song_id_idx ON SourceTypeSongs(SongId);
 
 CREATE TABLE CustomGroup
  ( Id INTEGER PRIMARY KEY,
-   Name VARCHAR(255)
+   Name VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 
 CREATE TABLE CustomGroupSongs
@@ -96,7 +99,8 @@ CREATE INDEX cgroup_song_id_idx ON CustomGroupSongs(SongId);
 
 CREATE TABLE Composer
  ( Id INTEGER PRIMARY KEY,
-   Name VARCHAR(255)
+   Name VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 
 CREATE TABLE ComposerSongs
@@ -119,10 +123,12 @@ CREATE TABLE Files
    FileSize INTEGER,
    LastModified INTEGER,
    Source INTEGER,
-   Type INTEGER,		-- 0 = image
+   Type INTEGER,		-- 0 = Image
    				-- 1 = PDF
 				-- 2 = 
 				-- 3 = ChordPro
+				-- 4 = 
+				-- 5 = PlaceHolder
    Password VARCHAR(255) DEFAULT ''
  );
 CREATE INDEX files_song_id_idx ON Files(SongId);
@@ -132,7 +138,8 @@ CREATE INDEX files_song_id_idx ON Files(SongId);
 
 CREATE TABLE Books
  ( Id INTEGER PRIMARY KEY,
-   Title VARCHAR(255)
+   Title VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 
 CREATE TABLE BookSongs
@@ -148,7 +155,8 @@ CREATE INDEX book_song_id_idx ON BookSongs(SongId);
 
 CREATE TABLE Artists
  ( Id INTEGER PRIMARY KEY,
-   Name VARCHAR(255)
+   Name VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 
 CREATE TABLE ArtistsSongs
@@ -164,7 +172,8 @@ CREATE INDEX artist_song_id_idx ON ArtistsSongs(SongId);
 
 CREATE TABLE Genres
  ( Id INTEGER PRIMARY KEY,
-   Type VARCHAR(255)
+   Type VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 INSERT INTO Genres VALUES( 1, 'Acapella');
 INSERT INTO Genres VALUES( 2, 'Acoustic');
@@ -214,7 +223,8 @@ CREATE INDEX genre_song_id_idx ON GenresSongs(SongId);
 
 CREATE TABLE Key
  ( Id INTEGER PRIMARY KEY,
-   Name VARCHAR(255)
+   Name VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 INSERT INTO Key VALUES( 1, 'C');
 INSERT INTO Key VALUES( 2, 'Cm');
@@ -266,7 +276,8 @@ CREATE INDEX key_song_id_idx ON KeySongs(SongId);
 
 CREATE TABLE Signature
  ( Id INTEGER PRIMARY KEY,
-   Name VARCHAR(255)
+   Name VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 
 CREATE TABLE SignatureSongs
@@ -282,7 +293,8 @@ CREATE INDEX sig_song_id_idx ON SignatureSongs(SongId);
 
 CREATE TABLE Years
  ( Id INTEGER PRIMARY KEY,
-   Name VARCHAR(255)
+   Name VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 
 CREATE TABLE YearsSongs
@@ -415,17 +427,6 @@ CREATE TABLE AudioFiles
  );
 CREATE INDEX audio_song_id_idx ON AudioFiles(SongId);
 
--- ExtraData
--- SongId is a foreign key to table Songs.
-
-CREATE TABLE ExtraData
- ( Id INTEGER PRIMARY KEY,
-   SongId INTEGER,
-   Notes VARCHAR(1024),
-   Tag VARCHAR(255),
-   AutoStartAudio INTEGER
- );
-
 -- Bookmarks.
 -- SongId is a foreign key to table Songs.
 
@@ -485,7 +486,8 @@ CREATE INDEX set_sep_id_idx ON SetlistSeparators(SetlistId);
 
 CREATE TABLE Collections
  ( Id INTEGER PRIMARY KEY,
-   Name VARCHAR(255)
+   Name VARCHAR(255),
+   SortBy INTEGER DEFAULT 1
  );
 
 CREATE TABLE CollectionSong
@@ -654,9 +656,36 @@ CREATE TABLE TextDisplaySettings
    Structure VARCHAR(255),	-- unused?
    Key INTEGER,
    -- UTF-8, ASCII, ISO-8859.1, UTF-16BE, UTF-16LE, windows-1251, windows-1256
-   Encoding INTEGER
+   Encoding INTEGER,
+   TransposeKey INTEGER,
+   TabSize INTEGER,
+   ChorusSize INTEGER
  );
 CREATE INDEX text_display_id_idx ON TextDisplaySettings(SongId);
+
+-- SongNotes
+
+CREATE TABLE SongNotes
+ ( Id INTEGER PRIMARY KEY,
+   SongId INTEGER,
+   ShowNotesOnLoad INTEGER,
+   DisplayTime INTEGER,
+   Notes VARCHAR(1024)
+ );
+CREATE INDEX song_notes_id_idx ON SongNotes(SongId);
+
+-- SetlistSongNotes
+
+CREATE TABLE SetlistSongNotes
+ ( Id INTEGER PRIMARY KEY,
+   SetlistId INTEGER,
+   SongId INTEGER,
+   ShowNotesOnLoad INTEGER,
+   DisplayTime INTEGER,
+   Notes VARCHAR(1024)
+ );
+CREATE INDEX setlist_notes_id_idx ON SetlistSongNotes(SetlistId);
+CREATE INDEX setlist_notes_song_id_idx ON SetlistSongNotes(SongId);
 
 -- Android specific.
 
