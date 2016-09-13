@@ -1,5 +1,5 @@
 -- Schema for MobileSheetsPro database.
--- Version: MobileSheetsPro 1.4.0
+-- Version: MobileSheetsPro 1.5.0
 
 PRAGMA foreign_keys=OFF;
 
@@ -42,7 +42,10 @@ CREATE TABLE MIDI
    Value INTEGER,
    CustomField INTEGER,
    SendOnLoad INTEGER,
-   LoadOnRecv INTEGER
+   LoadOnRecv INTEGER,
+   SendMSB INTEGER DEFAULT 1,
+   SendLSB INTEGER DEFAULT 1,
+   SendValue INTEGER DEFAULT 1
  );
 CREATE INDEX midi_song_id_idx ON MIDI(SongId);
 
@@ -60,7 +63,10 @@ CREATE INDEX midi_sysex_midi_id_idx ON MidiSysex(MidiId);
 CREATE TABLE SourceType
  ( Id INTEGER PRIMARY KEY,
    Type VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 INSERT INTO SourceType VALUES(1, 'Sheet Music');
 INSERT INTO SourceType VALUES(2, 'Tab');
@@ -83,13 +89,19 @@ CREATE INDEX srctype_song_id_idx ON SourceTypeSongs(SongId);
 CREATE TABLE CustomGroup
  ( Id INTEGER PRIMARY KEY,
    Name VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 
 CREATE TABLE CustomGroupSongs
  ( Id INTEGER PRIMARY KEY,
    GroupId INTEGER,
-   SongId INTEGER
+   SongId INTEGER,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 CREATE INDEX cgroup_group_id_idx ON CustomGroupSongs(GroupId);
 CREATE INDEX cgroup_song_id_idx ON CustomGroupSongs(SongId);
@@ -100,7 +112,10 @@ CREATE INDEX cgroup_song_id_idx ON CustomGroupSongs(SongId);
 CREATE TABLE Composer
  ( Id INTEGER PRIMARY KEY,
    Name VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 
 CREATE TABLE ComposerSongs
@@ -139,7 +154,10 @@ CREATE INDEX files_song_id_idx ON Files(SongId);
 CREATE TABLE Books
  ( Id INTEGER PRIMARY KEY,
    Title VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 
 CREATE TABLE BookSongs
@@ -156,7 +174,10 @@ CREATE INDEX book_song_id_idx ON BookSongs(SongId);
 CREATE TABLE Artists
  ( Id INTEGER PRIMARY KEY,
    Name VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 
 CREATE TABLE ArtistsSongs
@@ -173,7 +194,10 @@ CREATE INDEX artist_song_id_idx ON ArtistsSongs(SongId);
 CREATE TABLE Genres
  ( Id INTEGER PRIMARY KEY,
    Type VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 INSERT INTO Genres VALUES( 1, 'Acapella');
 INSERT INTO Genres VALUES( 2, 'Acoustic');
@@ -224,7 +248,10 @@ CREATE INDEX genre_song_id_idx ON GenresSongs(SongId);
 CREATE TABLE Key
  ( Id INTEGER PRIMARY KEY,
    Name VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 INSERT INTO Key VALUES( 1, 'C');
 INSERT INTO Key VALUES( 2, 'Cm');
@@ -277,7 +304,10 @@ CREATE INDEX key_song_id_idx ON KeySongs(SongId);
 CREATE TABLE Signature
  ( Id INTEGER PRIMARY KEY,
    Name VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 
 CREATE TABLE SignatureSongs
@@ -294,7 +324,10 @@ CREATE INDEX sig_song_id_idx ON SignatureSongs(SongId);
 CREATE TABLE Years
  ( Id INTEGER PRIMARY KEY,
    Name VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 
 CREATE TABLE YearsSongs
@@ -423,7 +456,8 @@ CREATE TABLE AudioFiles
    BPosition INTEGER DEFAULT -1,
    ABEnabled INTEGER DEFAULT 0,
    FullDuration INTEGER,
-   Volume FLOAT DEFAULT 0.75
+   Volume FLOAT DEFAULT 0.75,
+   Artist VARCHAR(255) DEFAULT ''
  );
 CREATE INDEX audio_song_id_idx ON AudioFiles(SongId);
 
@@ -435,7 +469,9 @@ CREATE TABLE Bookmarks
    SongId INTEGER,
    Name VARCHAR(255),
    PageNum INTEGER,
-   ShowInLibrary INTEGER
+   ShowInLibrary INTEGER,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 CREATE INDEX bookmark_song_id_idx ON Bookmarks(SongId);
 
@@ -457,7 +493,10 @@ CREATE TABLE Setlists
    Name VARCHAR(255),
    LastPage INTEGER,
    LastIndex INTEGER,
-   SortBy INTEGER
+   SortBy INTEGER,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 
 CREATE TABLE SetlistSong
@@ -487,7 +526,10 @@ CREATE INDEX set_sep_id_idx ON SetlistSeparators(SetlistId);
 CREATE TABLE Collections
  ( Id INTEGER PRIMARY KEY,
    Name VARCHAR(255),
-   SortBy INTEGER DEFAULT 1
+   SortBy INTEGER DEFAULT 1,
+   Ascending INTEGER DEFAULT 1,
+   DateCreated INTEGER,
+   LastModified INTEGER
  );
 
 CREATE TABLE CollectionSong
@@ -670,7 +712,9 @@ CREATE TABLE SongNotes
    SongId INTEGER,
    ShowNotesOnLoad INTEGER,
    DisplayTime INTEGER,
-   Notes VARCHAR(1024)
+   Notes VARCHAR(1024),
+   TextSize INTEGER,
+   Alignment INTEGER
  );
 CREATE INDEX song_notes_id_idx ON SongNotes(SongId);
 
@@ -682,10 +726,26 @@ CREATE TABLE SetlistSongNotes
    SongId INTEGER,
    ShowNotesOnLoad INTEGER,
    DisplayTime INTEGER,
-   Notes VARCHAR(1024)
+   Notes VARCHAR(1024),
+   TextSize INTEGER,
+   Alignment INTEGER
  );
 CREATE INDEX setlist_notes_id_idx ON SetlistSongNotes(SetlistId);
 CREATE INDEX setlist_notes_song_id_idx ON SetlistSongNotes(SongId);
+
+-- SongDisplaySettings
+
+CREATE TABLE SongDisplaySettings
+ ( Id INTEGER PRIMARY KEY,
+   SongId INTEGER,
+   UseDefaultAdapter INTEGER,
+   PortraitAdapterType INTEGER,
+   LandscapeAdapterType INTEGER,
+   UseDefaultScaleMode INTEGER,
+   PortraitScaleMode INTEGER,
+   LandscapeScaleMode INTEGER
+ );
+CREATE INDEX song_ds_id_idx ON SongDisplaySettings(SongId);
 
 -- Android specific.
 
