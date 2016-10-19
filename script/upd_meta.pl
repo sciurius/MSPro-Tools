@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Thu May 28 08:13:56 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jan  5 16:22:23 2016
-# Update Count    : 156
+# Last Modified On: Wed Oct 19 08:15:33 2016
+# Update Count    : 157
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -86,7 +86,7 @@ foreach my $m ( @$meta ) {
     if ( $m->{songid} ) {
 	warn( "Song: ", $m->{songid},
 	      " (", $m->{title} // "", ")\n") if $trace;
-	for ( qw( songid title sorttitle
+	for ( qw( songid title sorttitle artists composers
 		  sourcetypes collections tempo keys signatures ) ) {
 	    next unless $m->{$_};
 	    $m_attr->{$_} = $m->{$_};
