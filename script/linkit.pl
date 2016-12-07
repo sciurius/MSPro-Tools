@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Thu Sep 15 11:43:40 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Dec  7 09:43:05 2016
-# Update Count    : 218
+# Last Modified On: Wed Dec  7 10:05:15 2016
+# Update Count    : 221
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -33,6 +33,7 @@ my $padding = 0;		# padding between icons
 my $iconsz = 50;		# desired icon size
 my $vertical;			# stacking of icons
 my $border = 0;			# draw borders around icon
+my $gfunder = 0;		# draw images behind the page
 my $verbose = 0;		# verbose processing
 
 # Development options (not shown with -help).
@@ -167,7 +168,9 @@ while ( $row = $csv->getline($fh)) {
 	    # The graphics context uses the user transformations
 	    # currently in effect. If these were not neatly restored,
 	    # the graphics may be misplaced/scaled.
-	    $gfx = $page->gfx;
+	    # By using --gfunder, the images are placed behind the page
+	    # but this only works for transparent pages.
+	    $gfx = $page->gfx( $embed ? 0 : $gfunder );
 	}
 
 	my $border = $border;
@@ -5486,6 +5489,7 @@ sub app_options {
 		     'padding=i'	=> \$padding,
 		     'vertical'		=> \$vertical,
 		     'border'		=> \$border,
+		     'gfunder'		=> \$gfunder,
 		     'ident'		=> \$ident,
 		     'verbose|v+'	=> \$verbose,
 		     'trace'		=> \$trace,
@@ -5527,6 +5531,7 @@ Inserts document links in PDF
     --padding=NN	padding between icons, default 0
     --vertical		stacks icons vertically
     --border		draws a border around the links
+    --gfunder		draws the images behind the page
     --ident		shows identification
     --help		shows a brief help message and exits
     --man               shows full documentation and exits
@@ -5645,6 +5650,18 @@ Stacks the icons vertically.
 Requests a border to be drawn around the links.
 
 Borders are always drawn for links without icons.
+
+=item B<--gfunder>
+
+Drawing the icon images uses the page transformations in effect at the
+end of the page. If these were not neatly restored, the graphics may
+be misplaced/scaled/flipped.
+
+By using B<--gfunder>, the images are placed behind the page
+but this only works for transparent pages.
+
+This option is only relevant when adding links to external files. With
+B<--embed> the problem does not occur.
 
 =item B<--help>
 
