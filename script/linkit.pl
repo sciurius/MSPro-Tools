@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Thu Sep 15 11:43:40 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Nov  7 10:11:30 2016
-# Update Count    : 201
+# Last Modified On: Wed Dec  7 09:43:05 2016
+# Update Count    : 218
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -16,7 +16,7 @@ use strict;
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( linkit 0.09 );
+my ($my_name, $my_version) = qw( linkit 0.14 );
 
 ################ Command line parameters ################
 
@@ -84,16 +84,22 @@ $pp =~ s/\.pdf$//i;
 warn("Loading CSV $csvname...\n") if $verbose;
 my $csv = Text::CSV_XS->new( { binary => 1,
 			       sep_char => ";",
+			       empty_is_undef => 1,
 			       auto_diag => 1 });
 open( my $fh, "<:encoding(utf8)", $csvname )
   or die("$csvname: $!\n");
 
 my $i_title;
 my $i_pages;
+my $i_xpos;
+my $i_ypos;
 my $row = $csv->getline($fh);
 for ( my $i = 0; $i < @$row; $i++ ) {
+    next unless defined $row->[$i];
     $i_title = $i if lc($row->[$i]) eq "title";
     $i_pages = $i if lc($row->[$i]) eq "pages";
+    $i_xpos  = $i if lc($row->[$i]) eq "xpos";
+    $i_ypos  = $i if lc($row->[$i]) eq "ypos";
 }
 die("Invalid info in $csvname. missing TITLE\n") unless defined $i_title;
 die("Invalid info in $csvname. missing PAGES\n") unless defined $i_pages;
@@ -103,7 +109,6 @@ while ( $row = $csv->getline($fh)) {
     my $title = $row->[$i_title];
     my $pageno = $row->[$i_pages];
     $pageno = $1 if $pageno =~ /^(\d+)/;
-
     warn("Page: $pageno, ", encode_utf8($title), "\n") if $verbose;
 
     my $page;			# the current page
@@ -111,6 +116,8 @@ while ( $row = $csv->getline($fh)) {
     my $gfx;			# graphics content
     my $x;			# current x for icon
     my $y;			# current y for icon
+
+    # Allow CSV to specify individual x/y positions.
 
     my $t = $title;
     $t =~ s;[:/];@;g;		# eliminate dangerous characters
@@ -149,6 +156,11 @@ while ( $row = $csv->getline($fh)) {
 		$y = $m[1] - $ypos;
 		$dy = -$dy if $vertical;
 	    }
+	    $x += $row->[$i_xpos]
+	      if defined($i_xpos) && $row->[$i_xpos];
+	    $y -= $row->[$i_ypos]
+	      if defined($i_ypos) && $row->[$i_ypos];
+
 	    $text = $page->text;
 
 	    ####WARNING: Coordinates may be wrong!
@@ -5591,6 +5603,10 @@ the page.
 Icons are always placed from the outside of the page towards the
 inner side.
 
+An I<xpos> value may also be specified in the CSV file, in a column
+with title C<xpos>. If present, this value is added to position
+resulting from the command line / default values.
+
 =item B<--ypos=>I<NN>
 
 If the value is positive, icon placement starts relative to the top
@@ -5604,6 +5620,12 @@ page.
 
 Icons are always placed from the outside of the page towards the
 inner side.
+
+An I<ypos> offset value may also be specified in the CSV file, in a
+column with title C<ypos>. If present, this value is added to position
+resulting from the command line / default values. This is especially
+useful if there are songs in the PDF that do not start at the top of
+the page, e.g., when there are multiple songs on a single page.
 
 =item B<--iconsize=>I<NN>
 
