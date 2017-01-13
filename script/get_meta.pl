@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jan  6 14:39:23 2016
-# Update Count    : 185
+# Last Modified On: Fri Jan 13 12:52:56 2017
+# Update Count    : 190
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -166,6 +166,20 @@ foreach ( @$ret ) {
 	push( @t, $_->[0] );
     }
     $meta->[-1]->{tempos} = \@t if @t;
+
+    # Song notes.
+    $ret = dbh->selectall_arrayref
+      ( "SELECT Notes, TextSize, Alignment, DisplayTime, ShowNotesOnLoad".
+	" FROM SongNotes".
+	" WHERE SongId = $songid ".
+	"ORDER BY Id" );
+
+    if ( $ret && @$ret ) {
+	my %h;
+	@h{ qw( notes textsize alignment displaytime showonload ) }
+	  = @{ $ret->[0] };
+	$meta->[-1]->{notes} = \%h;
+    }
 
     $ret = [];
     $ret = dbh->selectall_arrayref( "SELECT Id, Page, Type, GroupNum,".

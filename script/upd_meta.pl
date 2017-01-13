@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Thu May 28 08:13:56 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Oct 19 08:23:18 2016
-# Update Count    : 158
+# Last Modified On: Fri Jan 13 13:02:55 2017
+# Update Count    : 161
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -87,7 +87,7 @@ foreach my $m ( @$meta ) {
 	warn( "Song: ", $m->{songid},
 	      " (", $m->{title} // "", ")\n") if $trace;
 	for ( qw( songid title sorttitle artists composers
-		  sourcetypes collections tempo keys signatures ) ) {
+		  sourcetypes collections tempo keys signatures notes ) ) {
 	    next unless $m->{$_};
 	    $m_attr->{$_} = $m->{$_};
 	}
@@ -255,6 +255,16 @@ sub upd_song {
 			 [ $songid, get_signature($_) ],
 		       );
 	}
+    }
+
+    if ( $attr->{notes} ) {
+	db_insupd( "SongNotes",
+		   [ qw( SongId Notes TextSize Alignment
+			 DisplayTime ShowNotesOnLoad ) ],
+		   [ $songid,
+		     map { $attr->{notes}->{$_} }
+		     qw(notes textsize alignment displaytime showonload) ],
+		 );
     }
 
     if ( $attr->{tempos} ) {
