@@ -169,6 +169,10 @@ sub db_upd($$$;$) {
 	db_vfy_textdisplaysettings( $a{FileId}, $a{SongId} );
     }
 
+    # Protect outside against splicing.
+    $fields = [ @$fields ];
+    $values = [ @$values ];
+
     my @keys = splice( @$fields, 0, $nkey );
     my $sql = "UPDATE $table SET " .
       join( ", ", map { "$_ = ?" } @$fields ) .
@@ -201,6 +205,7 @@ sub db_insupd($$$;$) {
       unless @$fields == @$values;
 
     my $id;
+    # Use [ @$fields ] 
     eval { $id = db_upd( $table, $fields, $values, $nkey ) };
     return $id unless $@;
     die($@) unless $@ =~ /Record not found/;
