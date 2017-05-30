@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Thu May 28 08:13:56 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jan 13 13:02:55 2017
-# Update Count    : 161
+# Last Modified On: Fri Jan 13 13:47:53 2017
+# Update Count    : 162
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -258,12 +258,16 @@ sub upd_song {
     }
 
     if ( $attr->{notes} ) {
+	my @v;
+	push( @v, $attr->{notes}->{notes}       || "" );
+	push( @v, $attr->{notes}->{textsize}    || 24 );
+	push( @v, $attr->{notes}->{alignment}   ||  0 );
+	push( @v, $attr->{notes}->{displaytime} ||  0 );
+	push( @v, $attr->{notes}->{showonload}  ||  0 );
 	db_insupd( "SongNotes",
 		   [ qw( SongId Notes TextSize Alignment
 			 DisplayTime ShowNotesOnLoad ) ],
-		   [ $songid,
-		     map { $attr->{notes}->{$_} }
-		     qw(notes textsize alignment displaytime showonload) ],
+		   [ $songid, @v ],
 		 );
     }
 
