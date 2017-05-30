@@ -5,18 +5,19 @@
 # Author          : Johan Vromans
 # Created On      : Thu Sep 15 11:43:40 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Dec  7 10:05:15 2016
-# Update Count    : 221
+# Last Modified On: Mon Mar 20 12:52:58 2017
+# Update Count    : 270
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
+warn("linkit is obsolete, use pdflink instead\n");
 use strict;
 
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( linkit 0.14 );
+my ($my_name, $my_version) = qw( linkit 0.16 );
 
 ################ Command line parameters ################
 
@@ -25,7 +26,7 @@ use Encode qw( decode_utf8 encode_utf8 );
 
 # Command line options.
 my $outpdf;			# output pdf
-my $embed;			# link or embed
+my $embed;			# link or embed or attach
 my $all = 0;			# link all files
 my $xpos = 60;			# position of icons
 my $ypos = 60;			# position of icons
@@ -34,6 +35,7 @@ my $iconsz = 50;		# desired icon size
 my $vertical;			# stacking of icons
 my $border = 0;			# draw borders around icon
 my $gfunder = 0;		# draw images behind the page
+my @targets;			# explicit link targets
 my $verbose = 0;		# verbose processing
 
 # Development options (not shown with -help).
@@ -42,11 +44,12 @@ my $trace = 0;			# trace (show process)
 my $test = 0;			# test mode.
 
 # Process command line options.
-$outpdf ||= "__new__.pdf";
 app_options();
 
 # Post-processing.
+$outpdf ||= "__new__.pdf" unless @targets;
 $trace |= ($debug || $test);
+$verbose |= $trace;
 
 ################ Presets ################
 
@@ -59,6 +62,13 @@ use Encode qw (encode_utf8 decode_utf8 );
 use Text::CSV_XS;
 use File::Spec;
 use File::Glob ':bsd_glob';
+
+if ( @targets ) {
+    linktargets( $_, \@targets )
+      foreach @ARGV;
+    exit;
+}
+
 
 my ( $pdfname, $csvname ) = @ARGV;
 unless ( $csvname ) {
@@ -112,27 +122,69 @@ while ( $row = $csv->getline($fh)) {
     $pageno = $1 if $pageno =~ /^(\d+)/;
     warn("Page: $pageno, ", encode_utf8($title), "\n") if $verbose;
 
+    my $t = $title;
+    $t =~ s;[:/];@;g;		# eliminate dangerous characters
+    $t =~ s;["<>?\\|*];@;g if $^O =~ /win/i; # eliminate dangerous characters
+
+    my @files = bsd_glob( File::Spec->catpath($v, $d, "$t.*" ) );
+    linktargets( $pdf, $pageno, \@files );
+
+}
+close $fh;
+
+# Finish PDF document.
+warn("Writing PDF $outpdf...\n") if $verbose;
+$pdf->saveas($outpdf);
+warn("Wrote: $outpdf\n") if $verbose;
+
+################ Subroutines ################
+
+sub linktargets {
+    my ( $pdf, $pageno, $pdfname, $targets, @targets );
+    my ( $v, $d, $p );
+
+    if ( @_ == 2 ) {
+	( $pdfname, $targets ) = @_;
+
+	warn("Loading PDF $pdfname...\n") if $verbose;
+	$pdf = PDF::API2->open($pdfname)
+	  or die("$pdfname: $!\n");
+
+	( $v, $d, $p ) = File::Spec->splitpath($pdfname);
+	my $pp = $p;
+	$pp =~ s/\.pdf$//i;
+
+	@targets = @$targets;
+	foreach ( @targets ) {
+	    $_ = $pp . $_ if /^\.\w+$/;
+	}
+    }
+    elsif ( @_ == 3 ) {
+	( $pdf, $pageno, $targets ) = @_;
+	@targets = @$targets;
+    }
+    else {
+	die("Internal error -- wrong vall to linktargets\n");
+    }
+
     my $page;			# the current page
     my $text;			# text content
     my $gfx;			# graphics content
     my $x;			# current x for icon
     my $y;			# current y for icon
 
-    # Allow CSV to specify individual x/y positions.
+    foreach ( @targets ) {
+	unless ( -r $_ ) {
+	    warn("\tTarget: ", encode_utf8($_), " missing (skipped)\n");
+	    next;
+	}
 
-    my $t = $title;
-    $t =~ s;[:/];@;g;		# eliminate dangerous characters
-    $t =~ s;["<>?\\|*];@;g if $^O =~ /win/i; # eliminate dangerous characters
-
-    my @files = bsd_glob( File::Spec->catpath($v, $d, "$t.*" ) );;
-    foreach ( @files ) {
-	my $t = substr( $_, length(File::Spec->catpath($v, $d, "") ) );
+	my $t = substr( $_, length(File::Spec->catpath($v, $d||"", "") ) );
 	( my $ext = $t ) =~ s;^.*\.(\w+)$;$1;;
 	my $p = get_icon( $pdf, $ext );
-
+	my $action =
+	  $p ? $embed ? $embed == 2 ? "attached" : "embedded" : "linked" : "ignored";
 	if ( $verbose ) {
-	    my $action =
-	      $p ? $embed ? "embedded" : "linked" : "ignored";
 	    warn("\tFile: ", encode_utf8($t), " ($action)\n");
 	}
 	next unless $p;
@@ -141,7 +193,7 @@ while ( $row = $csv->getline($fh)) {
 	my $dy = $iconsz + $padding;
 
 	unless ( $page ) {
-	    $page = $pdf->openpage($pageno);
+	    $page = $pdf->openpage(1);
 	    my @m = $page->get_mediabox;
 	    if ( $xpos >= 0 ) {
 		$x = $m[0] + $xpos;
@@ -157,13 +209,8 @@ while ( $row = $csv->getline($fh)) {
 		$y = $m[1] - $ypos;
 		$dy = -$dy if $vertical;
 	    }
-	    $x += $row->[$i_xpos]
-	      if defined($i_xpos) && $row->[$i_xpos];
-	    $y -= $row->[$i_ypos]
-	      if defined($i_ypos) && $row->[$i_ypos];
 
 	    $text = $page->text;
-
 	    ####WARNING: Coordinates may be wrong!
 	    # The graphics context uses the user transformations
 	    # currently in effect. If these were not neatly restored,
@@ -176,21 +223,21 @@ while ( $row = $csv->getline($fh)) {
 	my $border = $border;
 	my @r = ( $x, $y, $x+$iconsz, $y+$iconsz );
 	my $ann;
-
 	$ann = $page->annotation_xx;
 	if ( $embed ) {
 	    # This always uses the right coordinates.
-	    $ann->fileattachment( $t, -icon => $p, -rect => \@r );
+	    $ann->fileattachment( $t,
+				  -text => "$t $action by $my_name $my_version",
+				  $embed == 1 ? ( -icon => $p ) : (),
+				  -rect => \@r );
 	}
 	else {
 	    $ann->file( $t, -rect => \@r );
 	    my $scale = $iconsz / $p->width;
-	    ####WARNING: Coordinates may be wrong!
 	    $gfx->image( $p, @r[0,1], $scale );
 	}
 
 	if ( $border ) {
-	    ####WARNING: Coordinates may be wrong!
 	    $gfx->rectxy(@r );
 	    $gfx->stroke;
 	}
@@ -203,15 +250,20 @@ while ( $row = $csv->getline($fh)) {
 	    $x += $dx;
 	}
     }
+    return unless $pdfname;
+
+    # Finish PDF document.
+    if ( $outpdf ) {
+	warn("Writing PDF $outpdf...\n") if $verbose;
+	$pdf->saveas($outpdf);
+	warn("Wrote: $outpdf\n") if $verbose;
+    }
+    else {
+	warn("Updating PDF $pdfname...\n") if $verbose;
+	$pdf->update;
+	warn("Wrote: $pdfname\n") if $verbose;
+    }
 }
-close $fh;
-
-# Finish PDF document.
-warn("Writing PDF $outpdf...\n") if $verbose;
-$pdf->saveas($outpdf);
-warn("Wrote: $outpdf\n") if $verbose;
-
-################ Subroutines ################
 
 ################ Icons ################
 
@@ -5482,6 +5534,7 @@ sub app_options {
     if ( !GetOptions(
 		     'pdf=s'		=> \$outpdf,
 		     'embed'		=> \$embed,
+		     'attach'		=> sub { $embed = 2 },
 		     'all'		=> \$all,
 		     'xpos=i'		=> \$xpos,
 		     'ypos=i'		=> \$ypos,
@@ -5490,6 +5543,7 @@ sub app_options {
 		     'vertical'		=> \$vertical,
 		     'border'		=> \$border,
 		     'gfunder'		=> \$gfunder,
+		     'targets|t=s@',	=> \@targets,
 		     'ident'		=> \$ident,
 		     'verbose|v+'	=> \$verbose,
 		     'trace'		=> \$trace,
@@ -5505,7 +5559,15 @@ sub app_options {
 	$pod2usage->(VERBOSE => 2) if $man;
     }
     app_ident() if $ident;
-    $pod2usage->(1) if @ARGV < 1 || @ARGV > 2;
+
+    if ( @targets ) {
+	@targets = split( /[;,]/, join(":", @targets) );
+	$pod2usage->(1) unless @ARGV;
+	$pod2usage->(1) if $outpdf && @ARGV > 1;
+    }
+    else {
+	$pod2usage->(1) if @ARGV < 1 || @ARGV > 2;
+    }
 }
 
 sub app_ident {
@@ -5520,11 +5582,14 @@ linkit - insert document links in PDF
 
 linkit [options] pdf-file [csv-file]
 
+linkit [options] --targets=file1;file2 pdf-file [pdf-file ...]
+
 Inserts document links in PDF
 
  Options:
     --pdf=XXX		name of the new PDF (default __new__.pdf)
     --embed		embed the data files instead of linking
+    --attach		attach the data files instead of linking
     --xpos=NN		X-position for links
     --ypos=NN		Y-position for links relative to top
     --iconsize=NN	size of the icons, default 50
@@ -5532,6 +5597,7 @@ Inserts document links in PDF
     --vertical		stacks icons vertically
     --border		draws a border around the links
     --gfunder		draws the images behind the page
+    --targets=XXX	specifies the target(s) to link to
     --ident		shows identification
     --help		shows a brief help message and exits
     --man               shows full documentation and exits
@@ -5539,8 +5605,8 @@ Inserts document links in PDF
 
 =head1 DESCRIPTION
 
-This program will process the PDF document using the associated CSV as
-table of contents.
+When invoked without a B<--targets> option, this program will process
+the PDF document using the associated CSV as table of contents.
 
 For every item in the PDF that has one or more additional files (files
 with the same name as the title, but differing extensions), clickable
@@ -5562,6 +5628,11 @@ leading to these two files.
 
 Upon completion, the updated PDF is written out under the specified name.
 
+When invoked with the B<--targets> option, all specified PDF files get
+links inserted to the targets on the first page. If there is only one
+PDF file you can use the B<--pdf> option to designate the name of the
+new PDF document, otherwise all PDF files are updated (rewritten.
+
 =head1 OPTIONS
 
 Note that all sizes and dimensions are in I<points> (72 points per inch).
@@ -5581,6 +5652,10 @@ exist on disk.
 With B<--embed>, the target files are embedded (as file attachments)
 to the PDF document. The resultant PDF document will be usable on its
 own, no other files needed.
+
+=item B<--attach>
+
+Like B<--embed>, but no custom icon is supplied.
 
 =item B<--all>
 
@@ -5662,6 +5737,12 @@ but this only works for transparent pages.
 
 This option is only relevant when adding links to external files. With
 B<--embed> the problem does not occur.
+
+=item B<--targets=>I<FILE1> [ B<;> I<FILE2> ... ]
+
+Explicitly specifies the target files to link to. In this case no CSV
+is processed and the input PDF(s) are updated (rewritten) unless
+B<--pdf> is used to designate the output PDF name.
 
 =item B<--help>
 
@@ -5759,11 +5840,13 @@ options %opts (-rect, -border, -content (type), -icon (name)).
 sub fileattachment {
     my ( $self, $file, %opts ) = @_;
 
-    my $icon = $opts{-icon} || 'PushPin';
+    my $icon;
+    $icon = $opts{-icon} || 'PushPin' if exists $opts{-icon};
     my @r = @{ $opts{-rect}   } if defined $opts{-rect};
     my @b = @{ $opts{-border} } if defined $opts{-border};
 
     $self->{Subtype} = PDFName('FileAttachment');
+    $self->{T} = PDFStr($opts{"-text"}) if exists($opts{"-text"});
 
     if ( is_utf8($file)) {
 	# URI must be 7-bit ascii
@@ -5794,7 +5877,7 @@ sub fileattachment {
 
     $self->{Contents} = PDFStr($file);
     # Name will be ignored if there is an AP.
-    $self->{Name} = PDFName($icon) unless ref($icon);
+    $self->{Name} = PDFName($icon) if $icon && !ref($icon);
     # $self->{F} = PDFNum(0b0);
     $self->{C} = PDFArray( map { PDFNum($_) } 1, 1, 0 );
 
