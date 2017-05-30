@@ -88,4 +88,6 @@ CREATE INDEX song_notes_id_idx ON SongNotes(SongId);
 CREATE TABLE SetlistSongNotes(Id INTEGER PRIMARY KEY,SetlistId INTEGER,SongId INTEGER,ShowNotesOnLoad INTEGER,DisplayTime INTEGER,Notes VARCHAR(1024), TextSize INTEGER DEFAULT 24, Alignment INTEGER DEFAULT 0);
 CREATE INDEX setlist_notes_id_idx ON SetlistSongNotes(SetlistId);
 CREATE INDEX setlist_notes_song_id_idx ON SetlistSongNotes(SongId);
+CREATE TABLE SongDisplaySettings(Id INTEGER PRIMARY KEY,SongId INTEGER,UseDefaultAdapter INTEGER,PortraitAdapterType INTEGER,LandscapeAdapterType INTEGER,UseDefaultScaleMode INTEGER,PortraitScaleMode INTEGER,LandscapeScaleMode INTEGER);
+CREATE INDEX song_ds_id_idx ON SongDisplaySettings(SongId);
 /* No STAT tables available */
