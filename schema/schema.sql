@@ -1,6 +1,6 @@
 CREATE TABLE android_metadata (locale TEXT);
 CREATE TABLE Songs(Id INTEGER PRIMARY KEY,Title VARCHAR(255),Difficulty INTEGER,Custom VARCHAR(255) DEFAULT '',Custom2 VARCHAR(255) DEFAULT '',LastPage INTEGER,OrientationLock INTEGER,Duration INTEGER,Stars INTEGER DEFAULT 0,VerticalZoom FLOAT DEFAULT 1,SortTitle VARCHAR(255) DEFAULT '',Sharpen INTEGER DEFAULT 0,SharpenLevel INTEGER DEFAULT 4,CreationDate INTEGER DEFAULT 0,LastModified INTEGER DEFAULT 0,Keywords VARCHAR(255) DEFAULT '', AutoStartAudio INTEGER DEFAULT 0);
-CREATE TABLE MIDI(Id INTEGER PRIMARY KEY,SongId INTEGER,CommandType INTEGER,Cable INTEGER,Channel INTEGER,MSB INTEGER,LSB INTEGER,Value INTEGER,CustomField INTEGER,SendOnLoad INTEGER,LoadOnRecv INTEGER);
+CREATE TABLE MIDI(Id INTEGER PRIMARY KEY,SongId INTEGER,CommandType INTEGER,Cable INTEGER,Channel INTEGER,MSB INTEGER,LSB INTEGER,Value INTEGER,CustomField INTEGER,SendOnLoad INTEGER,LoadOnRecv INTEGER, SendMSB INTEGER DEFAULT 1, SendLSB INTEGER DEFAULT 1, SendValue INTEGER DEFAULT 1);
 CREATE TABLE MidiSysex(Id INTEGER PRIMARY KEY,MidiId INTEGER,SongId INTEGER,SysexBytes BLOB);
 CREATE TABLE SourceType(Id INTEGER PRIMARY KEY,Type VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 1458673884582, LastModified INTEGER DEFAULT 1458673884582);
 CREATE TABLE SourceTypeSongs(Id INTEGER PRIMARY KEY,SourceTypeId INTEGER,SongId INTEGER);
@@ -43,6 +43,9 @@ CREATE TABLE TextboxAnnotations(Id INTEGER PRIMARY KEY,BaseId INTEGER,TextColor 
 CREATE TABLE AnnotationPath(Id INTEGER PRIMARY KEY,AnnotationId INTEGER,PointX FLOAT,PointY FLOAT);
 CREATE TABLE ExtraBitmaps(Id INTEGER PRIMARY KEY,Path VARCHAR(255));
 CREATE TABLE TextDisplaySettings(Id INTEGER PRIMARY KEY,FileId INTEGER,SongId INTEGER,FontFamily INTEGER,TitleSize INTEGER,MetaSize INTEGER,LyricsSize INTEGER,ChordsSize INTEGER,LineSpacing FLOAT,ChordHighlight INTEGER,ChordColor INTEGER,ChordStyle INTEGER,Transpose INTEGER,Capo INTEGER,NumberChords INTEGER,ShowTitle INTEGER,ShowMeta INTEGER,ShowLyrics INTEGER,ShowChords INTEGER,EnableTranpose INTEGER,EnableCapo INTEGER,ShowTabs INTEGER,Structure VARCHAR(255),Key INTEGER,Encoding INTEGER, TransposeKey INTEGER DEFAULT 0, TabSize INTEGER DEFAULT 28, ChorusSize INTEGER DEFAULT 28);
+CREATE TABLE SongNotes(Id INTEGER PRIMARY KEY,SongId INTEGER,ShowNotesOnLoad INTEGER,DisplayTime INTEGER,Notes VARCHAR(1024), TextSize INTEGER DEFAULT 24, Alignment INTEGER DEFAULT 0);
+CREATE TABLE SetlistSongNotes(Id INTEGER PRIMARY KEY,SetlistId INTEGER,SongId INTEGER,ShowNotesOnLoad INTEGER,DisplayTime INTEGER,Notes VARCHAR(1024), TextSize INTEGER DEFAULT 24, Alignment INTEGER DEFAULT 0);
+CREATE TABLE SongDisplaySettings(Id INTEGER PRIMARY KEY,SongId INTEGER,UseDefaultAdapter INTEGER,PortraitAdapterType INTEGER,LandscapeAdapterType INTEGER,UseDefaultScaleMode INTEGER,PortraitScaleMode INTEGER,LandscapeScaleMode INTEGER);
 CREATE INDEX midi_song_id_idx ON MIDI(SongId);
 CREATE INDEX midi_sysex_midi_id_idx ON MidiSysex(MidiId);
 CREATE INDEX scrtype_type_id_idx ON SourceTypeSongs(SourceTypeId);
@@ -83,11 +86,8 @@ CREATE INDEX draw_ann_id_idx ON DrawAnnotations(BaseId);
 CREATE INDEX stamp_ann_id_idx ON StampAnnotations(BaseId);
 CREATE INDEX ann_ann_id_idx ON AnnotationPath(AnnotationId);
 CREATE INDEX text_display_id_idx ON TextDisplaySettings(SongId);
-CREATE TABLE SongNotes(Id INTEGER PRIMARY KEY,SongId INTEGER,ShowNotesOnLoad INTEGER,DisplayTime INTEGER,Notes VARCHAR(1024), TextSize INTEGER DEFAULT 24, Alignment INTEGER DEFAULT 0);
 CREATE INDEX song_notes_id_idx ON SongNotes(SongId);
-CREATE TABLE SetlistSongNotes(Id INTEGER PRIMARY KEY,SetlistId INTEGER,SongId INTEGER,ShowNotesOnLoad INTEGER,DisplayTime INTEGER,Notes VARCHAR(1024), TextSize INTEGER DEFAULT 24, Alignment INTEGER DEFAULT 0);
 CREATE INDEX setlist_notes_id_idx ON SetlistSongNotes(SetlistId);
 CREATE INDEX setlist_notes_song_id_idx ON SetlistSongNotes(SongId);
-CREATE TABLE SongDisplaySettings(Id INTEGER PRIMARY KEY,SongId INTEGER,UseDefaultAdapter INTEGER,PortraitAdapterType INTEGER,LandscapeAdapterType INTEGER,UseDefaultScaleMode INTEGER,PortraitScaleMode INTEGER,LandscapeScaleMode INTEGER);
 CREATE INDEX song_ds_id_idx ON SongDisplaySettings(SongId);
 /* No STAT tables available */
