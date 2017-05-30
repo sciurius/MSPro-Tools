@@ -8,7 +8,8 @@ package MobileSheetsPro::DB;
 
 use DBI;
 
-our $VERSION = "0.03";
+our $VERSION = "0.04";
+use constant DBVERSION => 40;
 
 my $dbh;
 my $trace = 0;
@@ -26,9 +27,20 @@ sub db_open {
     my ( $dbname, $opts ) = @_;
     $opts ||= {};
     $trace = delete( $opts->{Trace} );
+    my $force = delete( $opts->{NoVersionCheck} );
+    $force //= $ENV{MSPDB_NOVERSIONCHECK} // 0;
     Carp::croak("No database $dbname\n") unless -s $dbname;
     $opts->{sqlite_unicode} = 1;
     $dbh = DBI::->connect( "dbi:SQLite:dbname=$dbname", "", "", $opts );
+    my $v = $dbh->selectrow_array("pragma user_version");
+    return if $v ? $v == DBVERSION : 1;
+    my $msg = "Database version $v does not match API version " . DBVERSION;
+    if ( $force ) {
+	Carp::carp("$msg, proceeding anyway\n");
+    }
+    else {
+	Carp::croak("$msg, terminating\n");
+    }
 }
 
 sub dbh {
