@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Mar 15 20:08:08 2016
-# Update Count    : 265
+# Last Modified On: Fri Aug 25 21:21:04 2017
+# Update Count    : 273
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -25,6 +25,7 @@ use Getopt::Long 2.13;
 
 # Command line options.
 my $msbfile = "MobileSheetsProBackup.msb";
+my $dbonly = 0;
 my $zipfile;
 my $ann = 1;			# process annotations
 my $check = 0;			# check integrity only
@@ -111,7 +112,7 @@ my $len;
 my $file = 0;
 my %seen;
 
-while ( my $n = $msb->read(8) ) {
+while ( !$dbonly && ( my $n = $msb->read(8) ) ) {
 
     if ( $n != $HDR_MAGIC ) {
 	# Add recovery later.
@@ -170,10 +171,11 @@ while ( my $n = $msb->read(8) ) {
 }
 
 END {
-    foreach ( sort keys %seen ) {
-	warn("Missing file: $_\n") unless $seen{$_} > 0;
+    unless ( $dbonly ) {
+	foreach ( sort keys %seen ) {
+	    warn("Missing file: $_\n") unless $seen{$_} > 0;
+	}
     }
-
     if ( $msb && $msb->zip ) {
 	warn("$zipfile: Write error\n")
 	  unless $msb->zip->writeToFileNamed($zipfile) == AZ_OK;
@@ -276,7 +278,7 @@ sub zip {
 sub handle_preferences {
     my ( $self ) = @_;
     my $items = $self->read(4);
-    warn("Preferences: $items items\n") if $verbose;
+    warn("Preferences: $items items\n") if $verbose && !$dbonly;
     for my $i ( 0..$items-1 ) {
 	my $len = $self->read(2);
 	my $path = $self->readstring($len) . ".xml";
@@ -295,6 +297,7 @@ sub handle_preferences {
 		 or $data =~ /^.*\n\<map\>(?:.|\n)*\<\/map\>\s*$/ ) {
 	    warn("Pref item: $path -- Missing <map> content\n");
 	}
+	next if $dbonly;
 
 	if ( $self->zip ) {
 	    # Store into zip.
@@ -339,6 +342,8 @@ sub handle_database {
 	1;
     } or warn("DATABASE IS POSSIBLY CORRUPT\n");
 
+    my $v = $self->{dbh}->selectrow_array("pragma user_version");
+    warn("Database API version: $v\n");
     foreach $file ( @{ $self->{dbh}->selectall_arrayref("SELECT Id,Path,Type FROM Files") } ) {
 	next if $file->[2] == 5; # placeholder
 	warn("File ", $file->[0], " has no path?\n"), next unless $file->[1];
@@ -401,6 +406,7 @@ sub app_options {
     if ( @ARGV > 0 ) {
 	GetOptions('zip=s'	=> \$zipfile,
 		   'check'	=> \$check,
+		   'dbonly'	=> \$dbonly,
 		   'ident'	=> \$ident,
 		   'verbose+'	=> \$verbose,
 		   'quiet'	=> sub { $verbose = 0 },
@@ -435,6 +441,7 @@ msb_unpack [options] file
  Options:
    --zip=XXX		produce a zip
    --check		integrity check only
+   --dbonly             extract the database only
    --ident		show identification
    --help		brief help message
    --man                full documentation
@@ -455,6 +462,10 @@ zip file containing everything. Experimental.
 Checks integrity only. Does not extract files.
 
 This option cannot be used together with the B<--zip> option.
+
+=item B<--dbonly>
+
+Only extracts the database, not the files.
 
 =item B<--help>
 
