@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Mar 15 20:21:52 2016
-# Update Count    : 483
+# Last Modified On: Tue Mar 27 13:24:24 2018
+# Update Count    : 583
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -51,12 +51,19 @@ sub flatten_song {
     my $sth;
     my $r;
     my $xparent = 0;		# document with alpha
+    my $scale = 1;#DPI_SCALE;
 
     my $title = lookup( "Songs", "Title", $songid );
     die("Unknown song $songid\n") unless $title;
     warn("Processing song \"$title\"\n") if $verbose;
 
     my $pdf;
+    my $page;
+    my $jpg;
+
+    # Page being processed.
+    my $curpage = -1;
+
     if ( $songsrc && $songsrc =~ /\.pdf$/ ) {
 	warn("Song file \"$songsrc\"\n") if $verbose;
 	$pdf = PDF::API2->open($songsrc);
@@ -66,10 +73,24 @@ sub flatten_song {
     elsif ( $songsrc && $songsrc =~ /\.jpe?g$/ ) {
 	warn("Song file \"$songsrc\"\n") if $verbose;
 	$pdf = PDF::API2->new;
-	my $jpg = $pdf->image_jpeg($songsrc);
-	my $page = $pdf->page;
-	$page->mediabox( 0, 0, DPI_SCALE * $jpg->width, DPI_SCALE * $jpg->height );
-	$page->gfx->image( $jpg, 0, 0, DPI_SCALE  );
+	$jpg = $pdf->image_jpeg($songsrc);
+	$pdf->mediabox( 0, 0, $jpg->width, $jpg->height );
+	$page = $pdf->page;
+	$page->mediabox( 0, 0, $jpg->width, $jpg->height );
+	$scale = 1;
+	$page->gfx->image( $jpg, 0, 0, $scale );
+	$curpage = 0;
+    }
+    elsif ( $songsrc && $songsrc =~ /\.png$/ ) {
+	warn("Song file \"$songsrc\"\n") if $verbose;
+	$pdf = PDF::API2->new;
+	$jpg = $pdf->image_png($songsrc);
+	$pdf->mediabox( 0, 0, $jpg->width, $jpg->height );
+	$page = $pdf->page;
+	$page->mediabox( 0, 0, $jpg->width, $jpg->height );
+	$scale = 1;
+	$page->gfx->image( $jpg, 0, 0, $scale );
+	$curpage = 0;
     }
     else {
 	$pdf = PDF::API2->new;
@@ -89,34 +110,33 @@ sub flatten_song {
 
     $sth->execute($songid);
 
-    # Page being processed.
-    my $page;
-    my $curpage = -1;
-
     # Media box of current page.
     my @mb;
 
     while ( $sth->fetch ) {
 
 	if ( $curpage != $pageno ) {
-	    if ( $songsrc ) {
-		$page = $pdf->openpage( $pageno + 1 );
+	    if ( $jpg ) {
+		@mb = ( 0, 0, map { $_ * $scale } $jpg->width, $jpg->height );
+		$page = $pdf->page;
 	    }
 	    else {
-		$page = $pdf->page;
-		$page->mediabox('A4');
+		$page = $pdf->openpage( $pageno + 1 );
 	    }
-	    @mb = $page->get_mediabox; # A4 = 595 x 842
+	    $page->mediabox(@mb);
 	    $curpage = $pageno;
-	    warn( sprintf( "page $curpage, mediabox %.3f %.3f %.3f %.3f\n", @mb ) )
-	      if $debug;
 	}
+
+	@mb = $page->get_mediabox;
+	warn( sprintf( "page $curpage, mediabox %.3f %.3f %.3f %.3f\n",
+		       $page->get_mediabox ) )
+	  if $debug;
 
 	# Coordinate transformations.
 	# Since the transformations work different for text and graphics, we keep
 	# all annotations in separate containers.
-	my $mx = DPI_SCALE / $zoomx;
-	my $my = DPI_SCALE / $zoomy;
+	my $mx = $scale / $zoomx;
+	my $my = $scale / $zoomy;
 	my $tr = sub {
 	    my ( $g, $t1, $t2, $s1, $s2 ) = @_;
 	    $t1 += $mb[0];
@@ -156,7 +176,7 @@ sub flatten_song {
 		$gfx->fillcolor(   make_colour($fillcolor) ) if $fillcolor;
 		$gfx->linewidth($borderwidth);
 
-		warn( sprintf( "page $curpage, rect %.2f %.2f %.2f %.2f\n", @$r ) )
+		warn( sprintf( "page $curpage, rect %.2f %.2f %.2f %.2f\n", @$r[0..3] ) )
 		  if $debug;
 		$gfx->rectxy( $r->[0], $r->[1], $r->[2], $r->[3] );
 		if ( $fillcolor && $hasborder ) {
@@ -187,6 +207,7 @@ sub flatten_song {
 	    else {
 		$text->text($thetext);
 	    }
+	    warn( sprintf( "page $curpage, text \"%s\"\n", $thetext ) );
 	    $text->restore;
 	}
 
@@ -266,15 +287,18 @@ sub flatten_song {
 		my ( $px, $py ) = ( -1, -1 );     # previous point to suppress dups
 
 		my @points;		# points currently on path
-
+		my $nz = 0;
 		while ( @$r ) {
 		    my ( $x, $y ) = splice( @$r, 0, 2 );
+		    $nz++ if $x > 0.001;
+		    $nz++ if $y > 0.001;
 		    if ( $x > 100000 && $y > 100000 ) { # MAX_FLOATs
 			if ( @points ) {
 			    # Finish stroke at next point.
 			    push( @points, splice( @$r, 0, 2 ) );
-			    warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f ...\n",
-					   @points[0..3] ) ) if $debug;
+			    warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f ... (%d points)\n",
+					   @points[0..3], scalar(@points) ) )
+			      if $debug;
 			    $gfx->poly(@points);
 			    $gfx->stroke;
 			    $gfx->endpath;
@@ -292,8 +316,8 @@ sub flatten_song {
 		    push( @points, $x, $y );
 		}
 		if ( @points ) {
-		    warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f ... UNFINISHED\n",
-				   @points[0..3] ) );
+		    warn( sprintf( "page $curpage, poly %.3f %.3f %.3f %.3f ... UNFINISHED (%d nonzero points)\n",
+				   @points[0..3], $nz ) );
 		    $gfx->poly(@points);
 		    $gfx->stroke;
 		}
@@ -357,17 +381,60 @@ sub flatten_song {
 }
 
 my $gp_sth;
+my $dbvv;
 sub get_path {
     my ( $dbh, $id ) = @_;
-    $gp_sth ||= $dbh->prepare( "SELECT PointX, PointY FROM AnnotationPath" .
-			       " WHERE AnnotationId = ? ORDER BY Id" );
-    $gp_sth->execute($id);
+    my $ret;
+    eval {
+	# Pre DB version 41.
+	$gp_sth ||= $dbh->prepare( "SELECT PointX, PointY FROM AnnotationPath" .
+				      " WHERE AnnotationId = ? ORDER BY Id" );
+	$gp_sth->execute($id);
 
-    my $r = $gp_sth->fetchall_arrayref;
-    $gp_sth->finish;
+	my $r = $gp_sth->fetchall_arrayref;
+	$gp_sth->finish;
 
-    return [ map { @$_ } @$r ];
+	$ret = [ map { @$_ } @$r ];
+	$dbvv = 41;
+    } if !$dbvv || $dbvv == 41;
+    return $ret if $ret;
 
+    eval {
+	# DB version 42 and later.
+	$gp_sth ||= $dbh->prepare( "SELECT Count,Points FROM AnnotationPoints" .
+				   " WHERE AnnotationId = ?" );
+	$gp_sth->execute($id);
+
+	my $r = $gp_sth->fetchall_arrayref;
+	$gp_sth->finish;
+
+	my ( $count, $points ) = @{ $r->[0] };
+	warn("Annotation $id, $count points, blobsize = ", length($points),
+	     length($points) == 8*$count ? "" : " MISMATCH!!!",
+	     "\n");
+	$count = length($points)/8;
+	my @a;
+
+	if ( 1 ) {
+	    @a = unpack( "d[$count]", $points );
+	}
+	else {
+	    # Obsolete: byte swapped format.
+	    foreach ( 0 .. $count-1 ) {
+		my $p = reverse substr($points, 8*$_, 8);
+		   push( @a, unpack("d", $p ));
+		warn( sprintf( "XX: " . ("%02X" x 4) . " " . ("%02X" x 4) .
+			       "%10.3f\n",
+			       unpack("CCCCCCCC", $p),
+			       unpack("d", $p)))
+		  if $_ < 40;
+		}
+	}
+	$ret = \@a;
+	$dbvv = 42;
+    } if !$dbvv || $dbvv == 42;
+    return $ret if $ret;
+    die("$@\nNo Annotation points?\n");
 }
 
 sub make_colour {
