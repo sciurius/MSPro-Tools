@@ -13,9 +13,10 @@ use constant DBVERSION => 40;
 
 my $dbh;
 my $trace = 0;
+my $dbversion;
 
 our @EXPORT= qw( dbh db_open db_ins db_upd db_insupd db_insnodup
-		 db_delall lookup
+		 db_delall dbversion lookup
 		 get_sourcetype get_genre get_collections get_key
 		 get_collection get_setlist
 		 get_tempo get_signature get_artist get_composer
@@ -32,19 +33,23 @@ sub db_open {
     Carp::croak("No database $dbname\n") unless -s $dbname;
     $opts->{sqlite_unicode} = 1;
     $dbh = DBI::->connect( "dbi:SQLite:dbname=$dbname", "", "", $opts );
-    my $v = $dbh->selectrow_array("pragma user_version");
-    return if $v ? $v == DBVERSION : 1;
-    my $msg = "Database version $v does not match API version " . DBVERSION;
+    $dbversion = $dbh->selectrow_array("pragma user_version");
+    return if $dbversion ? $dbversion == DBVERSION : 1;
+    my $msg = "Database version $dbversion does not match API version " . DBVERSION;
     if ( $force ) {
-	Carp::carp("$msg, proceeding anyway\n");
+	Carp::carp("$msg, proceeding anyway");
     }
     else {
-	Carp::croak("$msg, terminating\n");
+	Carp::croak("$msg, terminating");
     }
 }
 
 sub dbh {
     $dbh;
+}
+
+sub dbversion {
+    $dbversion || 0;
 }
 
 my %sourcetype;
