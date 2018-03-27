@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sat May 30 13:10:48 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Mar 15 20:31:25 2016
-# Update Count    : 265
+# Last Modified On: Tue Mar 27 09:57:08 2018
+# Update Count    : 267
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -51,7 +51,7 @@ my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 use MobileSheetsPro::DB;
 use MobileSheetsPro::Annotations::PDF;
 
-db_open( $dbname, { RaiseError => 1, Trace => $trace } );
+db_open( $dbname, { NoVersionCheck => 1, RaiseError => 1, Trace => $trace } );
 
 my $r;
 
@@ -90,7 +90,7 @@ foreach ( @$r ) {
 	undef $songsrc;
     }
     else {
-	undef $songsrc unless $songsrc =~ /\.(pdf|jpe?g)$/i;
+	undef $songsrc unless $songsrc =~ /\.(pdf|jpe?g|png)$/i;
     }
 
     flatten_song( dbh, $songid, $songsrc, $newpdf );
