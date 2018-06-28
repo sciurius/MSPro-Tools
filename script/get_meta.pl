@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jan 13 12:52:56 2017
-# Update Count    : 190
+# Last Modified On: Wed Jun 27 19:47:40 2018
+# Update Count    : 192
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -55,12 +55,14 @@ use Data::Dumper;
 use JSON;
 
 my @sources  = ( undef, undef, 'sdcard' );
-my @filetypes  = ( 'Image', 'PDF', undef, 'ChordPro' );
+my @filetypes  = ( 'Image', 'PDF', 'Text', 'ChordPro' );
 my @anntypes   = qw( text draw highlight stamp );
 my @aligntypes = qw( left right center );
 my @drawtypes  = qw( line rectangle circle freehand );
 
-db_open( $dbname, { RaiseError => 1, Trace => $trace } );
+db_open( $dbname, { NoVersionCheck => 1,
+		    RaiseError => 1,
+		    Trace => $trace } );
 
 my $meta = [];
 
