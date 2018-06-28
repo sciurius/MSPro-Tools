@@ -153,3 +153,34 @@ Usage
   See https://www.youtube.com/watch?v=MgxgYL5P4z4 .
 
 WARNING: See WARNING above.
+
+chordpro_meta.
+
+Usage
+
+  perl script/chordpro_meta
+
+  This program extracts ChordPro metadata from the MobileSheetsPro
+  database.
+
+  The metadata is written to standard output in the form of a series of
+  ChordPro directives, preceeded by the file name, e.g.
+
+      === HowsaGoin/051_As_I_Roved_Out.cho === [2497/14472]
+      {title: As I Roved Out}
+      {artist: The High Kings}
+      {capo: 3}
+      {tempo: 105}
+      {meta: collection HowsaGoin!}
+      {meta: source Lead Sheet}
+      {meta: custom2 51}
+
+  qYou can cut/paste this into your ChordPro files, or use it
+  for visual inspection.
+  
+  The numbers between C<[ ]> are the internal song and file id. These
+  can be used for subsequent searches with B<--songid> and B<--fileid>
+  command line options.
+
+  If no songs are selected, the information for all songs in the
+  database is returned.
