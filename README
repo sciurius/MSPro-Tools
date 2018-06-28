@@ -175,7 +175,7 @@ Usage
       {meta: source Lead Sheet}
       {meta: custom2 51}
 
-  qYou can cut/paste this into your ChordPro files, or use it
+  You can cut/paste this into your ChordPro files, or use it
   for visual inspection.
   
   The numbers between C<[ ]> are the internal song and file id. These

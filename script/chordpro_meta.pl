@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Jun 28 11:21:01 2018
-# Update Count    : 174
+# Last Modified On: Thu Jun 28 11:32:51 2018
+# Update Count    : 176
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -47,11 +47,6 @@ $trace |= ($debug || $test);
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
 ################ The Process ################
-
-use Data::Dumper;
-use JSON;
-
-sub dbh();
 
 binmode( STDOUT, ':utf8' );
 
@@ -428,8 +423,9 @@ Johan Vromans C<< <jv at CPAN dot org > >>
 
 =head1 SUPPORT
 
-This program is part of the MobileSheetPro tools suite. Development is
-hosted on GitHub, repository L<https://github.com/sciurius/MSPro-Tools>.
+This program is part of the MobileSheetPro tools suite, but can be
+used independently. Development is hosted on GitHub, repository
+L<https://github.com/sciurius/MSPro-Tools>.
 
 Please report any bugs or feature requests to the GitHub issue tracker.
 
