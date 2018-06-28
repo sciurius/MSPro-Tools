@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Mon Mar 14 08:32:12 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Mar 15 20:12:20 2016
-# Update Count    : 55
+# Last Modified On: Tue Jun 26 12:44:09 2018
+# Update Count    : 62
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use warnings;
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( msb_reloc 0.04 );
+my ($my_name, $my_version) = qw( msb_reloc 0.05 );
 
 ################ Command line parameters ################
 
@@ -316,11 +316,16 @@ sub handle_preferences {
 	my $path = $self->readstring($len) . ".xml";
 	warn("Pref item: $path ($len)\n") if $verbose > 1;
 	$self->write( $len, 2 );
-	$self->writestring( $path, $len );
+	$self->writestring( $path, $len ); # yes, this will cut off ".xml"
 	$len = $self->read(8);
-	$self->write( $len, 8 );
 	$self->readbuf( \my $data, $len );
 	warn("item: ", substr($data, 0, 20), "...\n") if $debug;
+	if ( 0 && $path eq "default.xml" ) {
+	    #     <string name="storage_dir">/storage/C443-17EE/Android/data/com.zubersoft.mobilesheetspro/files</string>
+	    $data =~ s;>\Q$srcpath\E;>$dstpath;g;
+	    $len = length($data);
+	}
+	$self->write( $len, 8 );
 	$self->writebuf( \$data, $len );
 
 	# Verify <?xml ...> header.
