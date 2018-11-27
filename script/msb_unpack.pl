@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Aug 25 21:21:04 2017
-# Update Count    : 273
+# Last Modified On: Tue Nov 27 15:50:10 2018
+# Update Count    : 288
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use warnings;
 # Package name.
 my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( msb_unpack 0.12 );
+my ($my_name, $my_version) = qw( msb_unpack 0.13 );
 
 ################ Command line parameters ################
 
@@ -105,6 +105,10 @@ if ( $msb->version >= 4 ) {
     $msb->handle_preferences;
 }
 
+if ( $msb->version >= 5 ) {
+    $msb->handle_user_filters;
+}
+
 # First entry in the file is the database.
 $msb->handle_database( "mobilesheets.db" );
 
@@ -146,7 +150,12 @@ while ( !$dbonly && ( my $n = $msb->read(8) ) ) {
 	# the same physical file. Apparently two versions. Both
 	# versions are in the backup, the first with the length of the
 	# second and the second with a length of zero.
-	warn("Song $songid, size mismatch $sz <> $len\n") unless $sz == $len;
+	unless ( $sz == $len ) {
+	    warn( "Song $songid, path = $path, size = $sz, mtime = $mtime (" .
+		  localtime($mtime) . ")\n" )
+	      if $verbose <= 1;
+	    warn("Song $songid, size mismatch $sz (db) <> $len (msb)\n");
+	}
 	# Mike: This is how I dealt with dups and missing files.
 
 	# Read data.
@@ -224,6 +233,9 @@ sub open {
     elsif ( $magic == $FILE_MAGIC+1 ) {
 	$self->{version} = 4;
     }
+    elsif ( $magic == $FILE_MAGIC+2 ) {
+	$self->{version} = 5;
+    }
     die("Not a valid MSPro backup file (wrong version?)\n")
       unless $self->{version};
 
@@ -275,12 +287,38 @@ sub zip {
     return $self->{zip};
 }
 
+sub handle_user_filters {
+    my ( $self ) = @_;
+    my $path = "user_filters.xml";
+    my $len = $self->read(8);
+    warn("Item: $path ($len)\n") if $verbose > 1;
+    $self->readbuf( \my $data, $len );
+    warn("item: ", substr($data, 0, 20), "...\n") if $debug;
+
+    # Verify <?xml ...> header.
+    unless ( $data =~ /^\<\?xml\b.*\>/ ) {
+	warn("Pref item: $path -- Missing <?xml> header\n");
+    }
+
+    next if $dbonly;
+
+    if ( $self->zip ) {
+	# Store into zip.
+	warn("AddString: $path\n") if $verbose > 1;
+	my $m = $self->zip->addString( $data, $path, COMPRESSION_STORED );
+    }
+    elsif ( !$check ) {
+	::create_file( $path, $data, $len );
+    }
+}
+
 sub handle_preferences {
     my ( $self ) = @_;
     my $items = $self->read(4);
     warn("Preferences: $items items\n") if $verbose && !$dbonly;
+
     for my $i ( 0..$items-1 ) {
-	my $len = $self->read(2);
+	my $len  = $self->read(2);
 	my $path = $self->readstring($len) . ".xml";
 	$len = $self->read(8);
 	warn("Pref item: $path ($len)\n") if $verbose > 1;
@@ -405,7 +443,7 @@ sub app_options {
     # Process options.
     if ( @ARGV > 0 ) {
 	GetOptions('zip=s'	=> \$zipfile,
-		   'check'	=> \$check,
+		   'verify|check'	=> \$check,
 		   'dbonly'	=> \$dbonly,
 		   'ident'	=> \$ident,
 		   'verbose+'	=> \$verbose,
