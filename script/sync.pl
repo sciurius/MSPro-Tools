@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun May 26 09:39:06 2019
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon May 27 11:29:26 2019
-# Update Count    : 26
+# Last Modified On: Mon May 27 14:12:03 2019
+# Update Count    : 31
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use lib "$FindBin::Bin/../lib";
 # Package name.
 my $my_package = 'Sciurix';
 # Program name and version.
-my ($my_name, $my_version) = qw( sync 0.01 );
+my ($my_name, $my_version) = qw( sync 0.02 );
 
 ################ Command line parameters ################
 
