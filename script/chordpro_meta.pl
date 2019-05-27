@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun Jun  7 21:58:04 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Jun 28 11:32:51 2018
-# Update Count    : 176
+# Last Modified On: Sat Aug  4 18:14:42 2018
+# Update Count    : 180
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -29,6 +29,7 @@ use Getopt::Long 2.13;
 my $dbname = "mobilesheets.db";
 my $songid;
 my $fileid;
+my $concise;
 my $verbose = 0;		# verbose processing
 
 # Development options (not shown with -help).
@@ -71,6 +72,8 @@ SELECT Id, Title, SortTitle, Duration,
  FROM Songs
 EOD
 
+@ARGV = ( '%' ) unless @ARGV;
+
 if ( $songid ) {
     my $ret = db_sel( "$q_songs WHERE Id = ?".
 		      " ORDER BY Id", {}, $songid );
@@ -86,15 +89,9 @@ if ( $songid ) {
 	}
     }
 }
-elsif ( $fileid || !@ARGV ) {
-    my $ret;
-    if ( $fileid ) {
-	$ret = db_sel( "$q_files WHERE Id = ?" .
-		       " ORDER BY Id", {}, $fileid );
-    }
-    else {
-	$ret = db_sel( "$q_files ORDER BY Id" );
-    }
+elsif ( $fileid ) {
+    my $ret = db_sel( "$q_files WHERE Id = ?" .
+		      " ORDER BY Id", {}, $fileid );
 
     foreach my $fret ( @$ret ) {
 	my $songid = $fret->[2];
@@ -185,11 +182,13 @@ sub handle_song {
 
     # Setlist
     # You are in a little maze of twisty passages, all different.
-    $ret = db_sel( "SELECT Name FROM Setlists,SetlistSong".
-		   " WHERE SetlistId = Setlists.Id".
-		   " AND SongID = $songid" );
-    $meta->{setlist} = [ map { $_->[0] } @$ret ]
-      if $ret && @$ret;
+    unless ( $concise ) {
+	$ret = db_sel( "SELECT Name FROM Setlists,SetlistSong".
+		       " WHERE SetlistId = Setlists.Id".
+		       " AND SongID = $songid" );
+	$meta->{setlist} = [ map { $_->[0] } @$ret ]
+	  if $ret && @$ret;
+    }
 
     # Time (Signature).
     # You are in a maze of twisting little passages, all different.
@@ -232,11 +231,13 @@ sub handle_song {
 
     # Source
     # You are in a maze of twisty little passages, all different.
-    $ret = db_sel( "SELECT Type FROM SourceType,SourceTypeSongs".
-		   " WHERE SongID = $songid".
-		   "  AND SourceType.Id = SourceTypeId" );
-    $meta->{source} = [ grep { $_ } map { $_->[0] } @$ret ]
-      if $ret && @$ret;
+    unless ( $concise ) {
+	$ret = db_sel( "SELECT Type FROM SourceType,SourceTypeSongs".
+		       " WHERE SongID = $songid".
+		       "  AND SourceType.Id = SourceTypeId" );
+	$meta->{source} = [ grep { $_ } map { $_->[0] } @$ret ]
+	  if $ret && @$ret;
+    }
 
     # CustomGroup
     # You are in a little twisting maze of passages, all different.
@@ -303,6 +304,7 @@ sub app_options {
 		   'db=s',	=> \$dbname,
 		   'songid=i'	=> \$songid,
 		   'fileid=i'	=> \$fileid,
+		   'concise'	=> \$concise,
 		   'verbose'	=> \$verbose,
 		   'trace'	=> \$trace,
 		   'help|?'	=> \$help,
@@ -340,6 +342,7 @@ chordpro_meta [options] [title ...]
  Options:
    --fileid=NNN		internal file id
    --songid=NNN		internal song id
+   --concise		no setlists, source type
    --db=XXX		the MSPro database
    --ident		show identification
    --help		brief help message
