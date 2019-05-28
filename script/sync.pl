@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun May 26 09:39:06 2019
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon May 27 14:12:03 2019
-# Update Count    : 31
+# Last Modified On: Tue May 28 21:48:07 2019
+# Update Count    : 38
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -26,6 +26,8 @@ use Getopt::Long 2.13;
 # Command line options.
 my $server = "glaxxy.squirrel.nl";
 my $savedb;
+my $strip = 0;
+my $path = "";
 my $verbose = 0;		# verbose processing
 
 # Development options (not shown with -help).
@@ -48,9 +50,21 @@ my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 use MobileSheetsPro::Sync;
 
 my $fail;
+my @args;
 foreach my $file ( @ARGV ) {
-    next if -r -s $file;
-    warn("$file: $!\n");
+    warn("$file: $!\n"), next unless -r -s $file;
+    push( @args, $file ), next unless $strip || $path;
+    my $dst = $file;
+    if ( $strip ) {
+	my @p = split( /\/+/, $file );
+	splice( @p, 0, $strip );
+	$dst = join( '/', @p );
+    }
+    if ( $path ) {
+	$dst = $path . '/' . $dst;
+	$dst =~ s;//+;;g;
+    }
+    push( @args, [ $file, $dst ] );
 }
 die("Not all files accessible\n") if $fail;
 
@@ -60,7 +74,7 @@ my $msp = MobileSheetsPro::Sync->connect
 
 $msp->ping;
 
-$msp->writeFiles( @ARGV );
+$msp->sendFiles( @args );
 
 $msp->disconnect;
 
@@ -80,10 +94,14 @@ sub app_options {
         &pod2usage;
     };
 
+    Getopt::Long::Configure( qw(bundling) );
+
     # Process options.
     if ( @ARGV > 0 ) {
 	GetOptions( 'server=s'	=> \$server,
 		    'savedb=s'	=> \$savedb,
+		    'strip|p=i'	=> \$strip,
+		    'path=s'	=> \$path,
 		    'ident'	=> \$ident,
 		    'verbose'	=> \$verbose,
 		    'trace'	=> \$trace,
