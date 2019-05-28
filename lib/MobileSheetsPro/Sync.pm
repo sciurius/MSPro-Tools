@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun May 26 09:39:06 2019
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon May 27 14:10:35 2019
-# Update Count    : 138
+# Last Modified On: Tue May 28 22:28:19 2019
+# Update Count    : 161
 # Status          : Unknown, Use with caution!
 
 package MobileSheetsPro::Sync;
@@ -46,7 +46,8 @@ Client -> server (requests)
 
 		0007   REQUEST_SONG_EVENT
 		int4   song id
-		       NOTE: Generates a series of SONG EVENTs, one for each song file.
+		       NOTE: Generates a series of SONG EVENTs,
+		       one for each song file, ordered by id.
 
 		000c   TRANSFER_SONG_FILES
 		int4   number of files
@@ -212,89 +213,7 @@ sub disconnect {
     # Just close, leave, exit, ...
 }
 
-# Keepalive messages. Send every 3 seconds.
-# Not required for batch.
-sub ping {
-    my ( $self ) = @_;
-    warn("> ping\n") if $self->{debug};
-    $self->writeInt( PING );
-}
-
-# Write integer value in 4 byte network order.
-sub writeInt {
-    my ( $self, $val ) = @_;
-    warn("> int $val\n") if $self->{debug};
-    die unless syswrite( $self->{port}, pack( "N", $val ), 4 ) == 4;
-}
-
-# Read integer value in 4 byte network order.
-sub readInt {
-    my ( $self, $exp ) = @_;
-    warn("? int\n") if $self->{debug};
-    my $buf = "";
-    my $n = sysread( $self->{port}, $buf, 4 );
-    die $! unless $n == 4;
-    my $val = unpack( "N", $buf );
-    warn("< int $val [$n]\n") if $self->{debug};
-    die("readInt: got $val, want $exp\n") if defined $exp && $exp != $val;
-    return $val;
-}
-
-# Read long value in 2*4 byte network order.
-sub readLong {
-    my ( $self ) = @_;
-    warn("? long\n") if $self->{debug};
-    my $val = $self->readInt;
-    return ($val << 32) | $self->readInt;
-}
-
-# Read double value. According to the docs this is the same as long.
-*readDouble = \&readLong;
-
-# Read a single byte.
-sub readByte {
-    my ( $self ) = @_;
-    warn("? byte\n") if $self->{debug};
-    my $buf = "";
-    my $n = sysread( $self->{port}, $buf, 1 );
-    die $! unless $n == 1;
-    my $val = unpack( "C", $buf );
-    warn("< byte $val [$n]\n") if $self->{debug};
-    return $val;
-}
-
-# Boolean is same as byte.
-*readBoolean = \&readByte;
-
-# Read a sequence of raw bytes.
-sub readRaw {
-    my ( $self, $nn ) = @_;
-    warn("? raw $nn\n") if $self->{debug};
-    my $buf = "";
-    my $off = 0;
-    while ( $off < $nn ) {
-	my $n = sysread( $self->{port}, $buf, $nn, $off );
-	die("$!") unless defined $n && $n >= 0;
-	$off += $n;
-    }
-    return \$buf;
-}
-
-# Read a UTF string with 2-byte length prefix. Returns the perl string.
-sub readString {
-    my ( $self ) = @_;
-    warn("? str\n") if $self->{debug};
-    my $buf = "";
-    my $n = sysread( $self->{port}, $buf, 2 );
-    die($!) unless $n == 2;
-    my $l = unpack( "n", $buf );
-    $buf = "";
-    $n = sysread( $self->{port}, $buf, $l );
-    die($!) unless $n == $l;
-    my $val = decode_utf8($buf);
-    warn("< str \"$val\" [$l]\n") if $self->{debug};
-    return $val;
-}
+################ High Level ################
 
 # Read the database.
 sub readDB {
@@ -304,7 +223,7 @@ sub readDB {
     die( "readDB: Got msg $msg, expected " . DATABASE_EVENT . "\n" )
       unless $msg == DATABASE_EVENT;
 
-    my $data = $self->readRaw($n);
+    my $data = $self->read($n);
     warn("DB: ", length($$data), " bytes\n") if $self->{debug};
     if ( $self->{savedb} ) {
 	open( my $db, '>:raw', $self->{savedb} );
@@ -317,46 +236,119 @@ sub readDB {
     }
 }
 
+# Send files to MSPro.
+sub sendFiles {
+    my ( $self, @files ) = @_;
+    $self->writeInt( TRANSFER_SONG_FILES );
+    $self->writeInt(scalar(@files));
+    foreach my $file ( @files ) {
+	if ( UNIVERSAL::isa( $file, 'ARRAY' ) ) {
+	    $self->_writeFile(@$file);
+	}
+	else {
+	    $self->_writeFile($file);
+	}
+    }
+}
+
+################ Medium Level ################
+
+# Keepalive messages. Send every 3 seconds.
+# Not required for batch.
+sub ping {
+    my ( $self ) = @_;
+    warn("> ping\n") if $self->{debug};
+    $self->writeInt( PING );
+}
+
+# Write integer value in 4 byte network order.
+sub writeInt {
+    my ( $self, $val ) = @_;
+    warn("> int $val\n") if $self->{debug};
+    my $buf = pack( "N", $val );
+    $self->write(\$buf);
+}
+
+# Read integer value in 4 byte network order.
+sub readInt {
+    my ( $self, $exp ) = @_;
+    warn("? int\n") if $self->{debug};
+    my $bufp = $self->read(4);
+    my $val = unpack( "N", $$bufp );
+    warn("< int $val [4]\n") if $self->{debug};
+    die("readInt: got $val, want $exp\n") if defined $exp && $exp != $val;
+    return $val;
+}
+
+# Read long value in 2*4 byte network order.
+sub readLong {			# UNTESTED
+    my ( $self ) = @_;
+    warn("? long\n") if $self->{debug};
+    my $bufp = $self->read(8);
+    return unpack( "Q", $$bufp );
+}
+
+# Read double value.
+sub readDouble {
+    my ( $self ) = @_;
+    warn("?double\n") if $self->{debug};
+    my $bufp = $self->read(8);
+    my $val = unpack( "d>", $$bufp );
+    warn("< double $val [8]\n") if $self->{debug};
+}
+
+# Read a single byte.
+sub readByte {
+    my ( $self ) = @_;
+    warn("? byte\n") if $self->{debug};
+    my $bufp = $self->read(1);
+    my $val = unpack( "C", $$bufp );
+    warn("< byte $val [1]\n") if $self->{debug};
+    return $val;
+}
+
+# Boolean is same as byte.
+*readBoolean = \&readByte;
+
+# Read a UTF string with 2-byte length prefix. Returns the perl string.
+sub readString {
+    my ( $self ) = @_;
+    warn("? str\n") if $self->{debug};
+    my $bufp = $self->read(2);
+    my $l = unpack( "n", $$bufp );
+    $bufp = $self->read($l);
+    my $val = decode_utf8($$bufp);
+    warn("< str \"$val\" [$l]\n") if $self->{debug};
+    return $val;
+}
+
 # Write a (perl) string as UTF data and 2-byte length prefix.
 sub writeString {
     my ( $self, $data ) = @_;
     $data = encode_utf8($data);
     my $l = length($data);
     warn("> str \"$data\" [$l]\n") if $self->{debug};
-    my $buf = pack("n", $l);
-    $l += length($buf);
+    my $buf = pack( "n", $l );
     $buf .= $data;
-    my $n = syswrite( $self->{port}, $buf, $l );
-    die($!) unless $n == $l;
+    $self->write(\$buf);
     return;
 }
 
 # Write raw data with 4-byte length prefix.
 sub writeData {
-    my ( $self, $data ) = @_;
+    my ( $self, $data, $tag ) = @_;
+    $tag = defined $tag ? "$tag " : "";
     my $l = length($data);
-    warn("> data [$l]\n") if $self->{debug};
+    warn("> data $tag"."[$l]\n") if $self->{debug};
     my $buf = pack("N", $l);
-    $l += length($buf);
     $buf .= $data;
-    my $n = syswrite( $self->{port}, $buf, $l );
-    die($!) unless $n == $l;
+    $self->write(\$buf);
     return;
-}
-
-# Send files to MSPro.
-sub writeFiles {
-    my ( $self, @files ) = @_;
-    $self->writeInt( TRANSFER_SONG_FILES );
-    $self->writeInt(scalar(@files));
-    foreach my $file ( @files ) {
-	$self->_writeFile($file);
-    }
 }
 
 # (internal) Send data as file.
 sub _writeFile {
-    my ( $self, $file, $data ) = @_;
+    my ( $self, $file, $path, $data ) = @_;
 
     unless ( defined $data ) {
 	open( my $fd, "<:raw", $file );
@@ -367,6 +359,33 @@ sub _writeFile {
 	$data = do { local $/; <$fd> };
     }
 
-    $self->writeData($file);	# path
-    $self->writeData($data);	# content
+    $self->writeData($path, $path);	# path
+    $self->writeData($data, "content");	# content
 }
+
+################ Low Level ################
+
+sub read {
+    my ( $self, $nn ) = @_;
+    my $buf = "";
+    my $off = 0;
+    while ( $off < $nn ) {
+	my $n = sysread( $self->{port}, $buf, $nn, $off );
+	die("$!") unless defined $n && $n > 0;
+	$off += $n;
+    }
+    return \$buf;
+}
+
+sub write {
+    my ( $self, $bufp ) = @_;
+    my $nn = length($$bufp);
+    my $off = 0;
+    while ( $off < $nn ) {
+	my $n = syswrite( $self->{port}, $$bufp, $nn, $off );
+	die("$!") unless defined $n && $n > 0;
+	$off += $n;
+    }
+    return $bufp;
+}
+
