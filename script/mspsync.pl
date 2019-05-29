@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun May 26 09:39:06 2019
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue May 28 21:48:07 2019
-# Update Count    : 38
+# Last Modified On: Wed May 29 08:33:18 2019
+# Update Count    : 44
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -17,7 +17,7 @@ use lib "$FindBin::Bin/../lib";
 # Package name.
 my $my_package = 'Sciurix';
 # Program name and version.
-my ($my_name, $my_version) = qw( sync 0.02 );
+my ($my_name, $my_version) = qw( mspsync 0.03 );
 
 ################ Command line parameters ################
 
@@ -25,9 +25,11 @@ use Getopt::Long 2.13;
 
 # Command line options.
 my $server = "glaxxy.squirrel.nl";
-my $savedb;
-my $strip = 0;
-my $path = "";
+my $savedb;			# save the db locally
+my $linger;			# do not disconnect
+my $full;			# retrieve all settings and db
+my $strip = 0;			# strip components off source path
+my $path = "";			# prefix for dest path
 my $verbose = 0;		# verbose processing
 
 # Development options (not shown with -help).
@@ -70,13 +72,13 @@ die("Not all files accessible\n") if $fail;
 
 my $msp = MobileSheetsPro::Sync->connect
   ( $server, { debug => $debug, verbose => $verbose, trace => $trace,
-	       savedb => $savedb } );
+	       savedb => $savedb, full => $full, linger => $linger } );
 
 $msp->ping;
 
 $msp->sendFiles( @args );
 
-$msp->disconnect;
+#$msp->disconnect;
 
 exit 0;
 
@@ -100,6 +102,8 @@ sub app_options {
     if ( @ARGV > 0 ) {
 	GetOptions( 'server=s'	=> \$server,
 		    'savedb=s'	=> \$savedb,
+		    'linger'	=> \$linger,
+		    'full'	=> \$full,
 		    'strip|p=i'	=> \$strip,
 		    'path=s'	=> \$path,
 		    'ident'	=> \$ident,
@@ -133,7 +137,11 @@ sync [options] [file ...]
 
  Options:
    --server=XXX		the tablet running MSPro
+   --full		retrieve all settings and db upon connect
    --savedb=XXX		saves the database unter the given name
+   --path=XXX		prefix for destination file names
+   --strip=N		strip components of source file names
+   --linger		do not disconnect
    --ident		shows identification
    --help		shows a brief help message and exits
    --man                shows full documentation and exits
@@ -147,10 +155,37 @@ sync [options] [file ...]
 
 The name or IP address of the server running MSPro.
 
+=item B<--full>
+
+Upon connect, retrieve all settings and database from the tablet.
+
 =item B<--savedb=>I<XXX>
 
 If specified, the MSPro database will be saved on the local system
-under the given name.
+under the given name. Implies B<--full>.
+
+=item B<--path=>I<XXX>
+
+The destination path on the tablet is formed by appending the source
+file name to this path prefix. See also B<--strip>.
+
+=item B<--strip=>I<N>
+
+Strip I<N> components from the start of the source file name before
+appending to the path prefix to form the destination path on the
+tablet.
+
+For example:
+
+    mspsync --path=extra --strip=1 foo/bar.png
+
+This will transfer local file C<foo/bar.png> to C<extra/bar.png> on
+the tablet.
+
+=item B<--linger>
+
+Do not close down the communication with the tablet. A new sync can be
+initiated by hitting the C<RETRY> button.
 
 =item B<--help>
 

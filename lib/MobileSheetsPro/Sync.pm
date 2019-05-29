@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun May 26 09:39:06 2019
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue May 28 22:28:19 2019
-# Update Count    : 161
+# Last Modified On: Wed May 29 08:20:30 2019
+# Update Count    : 165
 # Status          : Unknown, Use with caution!
 
 package MobileSheetsPro::Sync;
@@ -114,6 +114,8 @@ sub connect {
     $self->readInt(4);
     $self->readInt(CONNECTION_ACCEPTED_EVENT);
 
+    return $self unless $self->{savedb} || $self->{full};
+
     # Request tablet identification and stuff.
     $self->writeInt( REQUEST_TABLET_VERSION );
 
@@ -199,7 +201,10 @@ sub connect {
     # Then it sends its database.
     $self->readDB;
 
-    use DDumper; DDumper($settings) if $self->{debug};
+    if ( $self->{debug} ) {
+	require DDumper;
+	DDumper($settings);
+    }
 
     # Ok, success!
     return $self;
@@ -209,7 +214,7 @@ sub connect {
 # Gracefully disconnect.
 sub disconnect {
     my ( $self ) = @_;
-    $self->writeInt( REQUEST_DISCONNECT );
+    $self->writeInt( REQUEST_DISCONNECT ) unless $self->{linger};
     # Just close, leave, exit, ...
 }
 
@@ -239,6 +244,7 @@ sub readDB {
 # Send files to MSPro.
 sub sendFiles {
     my ( $self, @files ) = @_;
+    return unless @files;
     $self->writeInt( TRANSFER_SONG_FILES );
     $self->writeInt(scalar(@files));
     foreach my $file ( @files ) {
