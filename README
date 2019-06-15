@@ -60,6 +60,8 @@ flatten.pl
 This tool processes an unpacked MSPRo backup set and creates PDF files
 that include the MSPro annotations.
 
+** This tool no longer works with recent MSPro versions **
+
 Usage:
 
   Unpack the backup set into the current directory.
