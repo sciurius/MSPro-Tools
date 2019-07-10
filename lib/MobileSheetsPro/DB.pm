@@ -37,7 +37,7 @@ sub db_open {
     return if $dbversion ? $dbversion == DBVERSION : 1;
     my $msg = "Database version $dbversion does not match API version " . DBVERSION;
     if ( $force ) {
-	Carp::carp("$msg, proceeding anyway");
+	Carp::carp("$msg, proceeding anyway") unless $force > 1;
     }
     else {
 	Carp::croak("$msg, terminating");
