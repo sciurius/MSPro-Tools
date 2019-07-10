@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun May 26 09:39:06 2019
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed May 29 08:33:18 2019
-# Update Count    : 44
+# Last Modified On: Wed May 29 10:02:54 2019
+# Update Count    : 45
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -78,7 +78,7 @@ $msp->ping;
 
 $msp->sendFiles( @args );
 
-#$msp->disconnect;
+$msp->disconnect;
 
 exit 0;
 

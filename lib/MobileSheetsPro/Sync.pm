@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Sun May 26 09:39:06 2019
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed May 29 08:20:30 2019
-# Update Count    : 165
+# Last Modified On: Thu May 30 15:08:38 2019
+# Update Count    : 197
 # Status          : Unknown, Use with caution!
 
 package MobileSheetsPro::Sync;
@@ -80,9 +80,11 @@ use constant DEFAULT_SEND_PORT	=> 16569;
 use constant PC_VERSION		=> 20803;
 
 # Message codes
-use constant
-  { CONNECTION_ACCEPTED_EVENT	 =>  1,
-    DATABASE_EVENT	       	 =>  4,
+
+my @msgnames;
+my %msgtbl =
+  ( CONNECTION_ACCEPTED_EVENT	 =>  1,
+    DATABASE_EVENT		 =>  4,
     REQUEST_DISCONNECT		 =>  5,
     REQUEST_SONG_EVENT		 =>  7,
     SONG_EVENT			 =>  8,
@@ -92,7 +94,10 @@ use constant
     REQUEST_PC_VERSION		 => 21,
     PING			 => 27,
     REQUEST_SQL_COMMAND		 => 45,
-  };
+  );
+while ( my($k,$v) = each %msgtbl ) {
+    $msgnames[$v] = $k;
+}
 
 use Encode;
 use IO::Socket::IP;
@@ -110,31 +115,87 @@ sub connect {
     die($!) unless $self->{port};
     warn("Connected to $peer\n");
 
-    # Upon connection, the server sends a CONNECTION_ACCEPTED_EVENT.
-    $self->readInt(4);
-    $self->readInt(CONNECTION_ACCEPTED_EVENT);
+    $self->readMessage;		# CONNECTION_ACCEPTED_EVENT
 
     return $self unless $self->{savedb} || $self->{full};
 
     # Request tablet identification and stuff.
-    $self->writeInt( REQUEST_TABLET_VERSION );
+    $self->writeInt( $msgtbl{REQUEST_TABLET_VERSION} );
 
-    # Response from MSPro.
-    $self->readInt(8);
-    $self->readInt( REQUEST_TABLET_VERSION );
+    $self->readMessage;		# REQUEST_TABLET_VERSION
+    $self->readMessage;		# REQUEST_PC_VERSION
+    $self->readMessage;		# TABLET_SETTINGS_EVENT
+    $self->readMessage;		# DATABASE_EVENT
+    $self->readMessage;		# DATABASE_EVENT
+
+    if ( $self->{debug} ) {
+	require DDumper;
+	DDumper($self->{settings});
+    }
+
+    # Ok, success!
+    return $self;
+
+}
+
+# Gracefully disconnect.
+sub disconnect {
+    my ( $self ) = @_;
+    $self->writeInt( $msgtbl{REQUEST_DISCONNECT} ) unless $self->{linger};
+    # Just close, leave, exit, ...
+}
+
+################ High Level ################
+
+my $msghandlers = {};
+
+# Get a message.
+sub readMessage {
+    my ( $self ) = @_;
+
+    my $len = $self->readInt - 4;
+    my $msg = $self->readInt;
+    my $msgname = $msgnames[$msg] // "**UNKNOWN**";
+
+    if ( $msghandlers->{$msgname} ) {
+	warn("Got message $msgname, length $len, dispatching...\n")
+	  if $self->{debug};
+	$msghandlers->{$msgname}->( $self, $msg, $len );
+    }
+    else {
+	warn("Unhandled message $msgname ($msg), skipping\n");
+	$self->read($len);
+    }
+}
+
+sub checklen {
+    my ( $self, $msg, $len, $xp ) = @_;
+    die( $msgnames[$msg] . " wrong length $len, must be $xp\n")
+      unless $len == $xp;
+}
+
+$msghandlers->{CONNECTION_ACCEPTED_EVENT} = sub {
+    my ( $self, $msg, $len ) = @_;
+    $self->checklen( $msg, $len, 0 );
+};
+
+$msghandlers->{REQUEST_TABLET_VERSION} = sub {
+    my ( $self, $msg, $len ) = @_;
+    $self->checklen( $msg, $len, 4 );
     $self->readInt;		# int ver
     $self->readString;		# package
+};
 
-    $self->readInt(4);
-    $self->readInt( REQUEST_PC_VERSION );
-
+$msghandlers->{REQUEST_PC_VERSION} = sub {
+    my ( $self, $msg, $len ) = @_;
+    $self->checklen( $msg, $len, 0 );
     # Send my (faked) version.
-    $self->writeInt( REQUEST_PC_VERSION );
+    $self->writeInt( $msgtbl{REQUEST_PC_VERSION} );
     $self->writeInt( PC_VERSION );
+};
 
-    # MSPro now sends the full settings...
-    $self->readInt;		# length
-    $self->readInt( TABLET_SETTINGS_EVENT );
+$msghandlers->{TABLET_SETTINGS_EVENT} = sub {
+    my ( $self, $msg, $len ) = @_;
 
     my $settings;
     $settings->{density} = $self->readDouble;
@@ -197,38 +258,12 @@ sub connect {
     }
 
     $self->{settings} = $settings;
+};
 
-    # Then it sends its database.
-    $self->readDB;
+$msghandlers->{DATABASE_EVENT} = sub {
+    my ( $self, $msg, $len ) = @_;
 
-    if ( $self->{debug} ) {
-	require DDumper;
-	DDumper($settings);
-    }
-
-    # Ok, success!
-    return $self;
-
-}
-
-# Gracefully disconnect.
-sub disconnect {
-    my ( $self ) = @_;
-    $self->writeInt( REQUEST_DISCONNECT ) unless $self->{linger};
-    # Just close, leave, exit, ...
-}
-
-################ High Level ################
-
-# Read the database.
-sub readDB {
-    my ( $self ) = @_;
-    my $n = $self->readInt - 4;	      # db length
-    my $msg = $self->readInt;	      # this is the database (4)
-    die( "readDB: Got msg $msg, expected " . DATABASE_EVENT . "\n" )
-      unless $msg == DATABASE_EVENT;
-
-    my $data = $self->read($n);
+    my $data = $self->read($len);
     warn("DB: ", length($$data), " bytes\n") if $self->{debug};
     if ( $self->{savedb} ) {
 	open( my $db, '>:raw', $self->{savedb} );
@@ -239,20 +274,20 @@ sub readDB {
 	print $db $$data;
 	close($db);
     }
-}
+};
 
 # Send files to MSPro.
 sub sendFiles {
     my ( $self, @files ) = @_;
     return unless @files;
-    $self->writeInt( TRANSFER_SONG_FILES );
+    $self->writeInt( $msgtbl{TRANSFER_SONG_FILES} );
     $self->writeInt(scalar(@files));
     foreach my $file ( @files ) {
 	if ( UNIVERSAL::isa( $file, 'ARRAY' ) ) {
 	    $self->_writeFile(@$file);
 	}
 	else {
-	    $self->_writeFile($file);
+	    $self->_writeFile( $file, $file );
 	}
     }
 }
@@ -264,7 +299,7 @@ sub sendFiles {
 sub ping {
     my ( $self ) = @_;
     warn("> ping\n") if $self->{debug};
-    $self->writeInt( PING );
+    $self->writeInt( $msgtbl{PING} );
 }
 
 # Write integer value in 4 byte network order.
