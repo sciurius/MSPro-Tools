@@ -8,7 +8,7 @@ package MobileSheetsPro::DB;
 
 use DBI;
 
-our $VERSION = "0.04";
+our $VERSION = "0.05";
 use constant DBVERSION => 40;
 
 my $dbh;
@@ -20,7 +20,7 @@ our @EXPORT= qw( dbh db_open db_ins db_upd db_insupd db_insnodup
 		 get_sourcetype get_genre get_collections get_key
 		 get_collection get_setlist
 		 get_tempo get_signature get_artist get_composer
-		 get_encoding );
+		 get_encoding format_sql );
 
 use base qw(Exporter);
 
@@ -333,9 +333,144 @@ sub db_vfy_textdisplaysettings {
 
 }
 
+################ Extra ################
+
+# Produce a nicely formatted SQL string.
+# Optionally adds/removes foreign key support.
+# Note this is not really general purpose, but supports all of the
+# MSPro stuff.
+
+my %_fk =
+  ( AnnotationId  => "AnnotationsBase",
+    ArtistId	  => "Artists",
+    BookId	  => "Books",
+    CollectionId  => "Collections",
+    ComposerId	  => "Composer",
+    FileId	  => "Files",
+    GenreId	  => "Genres",
+    KeyId	  => '"Key"',
+    MidiId	  => "MIDI",
+    SetlistId	  => "Setlists",
+    SignatureId	  => "Signature",
+    SongId	  => "Songs",
+    SourceTypeId  => "SourceType",
+    YearId	  => "Years",
+  );
+
+sub format_sql {
+    my ( $sql, $opts ) = @_;
+
+    my $ret = "";
+    my $id = sub {
+	my $name = shift;
+	return '"' . $name . '"' if $name =~ /^(key)$/i;
+	$name;
+    };
+    my $fmt = "%-26s %-15s%s%s";
+    my $addfk = $opts->{AddForeignKeys} // 0;
+    my $delfk = $addfk < 0;
+    $addfk = $addfk > 0;
+
+    if ( $sql =~ m/ ^
+		    create \s+ table \s* (\S+) \s* \( (.*) \) \s*
+		    ;
+		  /xsi ) {
+	my $table = $1;
+	return if $table eq "sqlite_stat1";
+	my $sql = $2;
+	if ( $sql =~ /foreign \s+ key/isx ) {
+	    $addfk = 0;
+	}
+	else {
+	    $delfk = 0;
+	}
+
+	my @el;
+	my @fk;
+	foreach my $el ( split( /,/, $sql ) ) {
+	    $el =~ s/^\s+//s;
+	    $el =~ s/\s+$//s;
+	    if ( $el =~ m/ ^
+			   foreign \s+ key \s*
+			   \( (\S*?) \) \s*
+			   references \s+ (\S+) \s*
+			   \( (.*?) \)
+			 /xsi ) {
+		next if $delfk;
+		push( @el,
+		      sprintf( $fmt,
+			       "FOREIGN KEY(" . $id->($1) . ")",
+			       "REFERENCES",
+			       $id->($2) . "(" . $id->($3) . ")",
+			       "" ) );
+	    }
+	    elsif ( $el =~ m/ ^
+			      (\S+) \s+
+			      (\S+)
+			      ( \s+ ( primary \s key ) )?
+			      ( \s+ ( default ) \s+ (.*) )?
+			    /ix ) {
+		my $name = $1;
+		push( @el,
+		      sprintf( $fmt,
+			       $id->($1),
+			       uc($2),
+			       defined($3) ? uc($4)." " : '',
+			       defined($5) ? uc($6)." ".$7." " : '',
+			     ) );
+		$el[-1] =~ s/\s+$//;
+		if ( $addfk
+		     && ! ( $name eq "SongId" && $table eq "Songs" )
+		     && $name =~ /^\w+Id$/ && defined $_fk{$name} ) {
+		    push( @fk,
+			  sprintf( $fmt,
+				   "FOREIGN KEY(" . $id->($name) . ")",
+				   "REFERENCES",
+				   $id->($_fk{$name}) . "(Id)",
+				   "" ) );
+		}
+	    }
+	    elsif ( $el =~ /^(\w+)$/ ) {
+		push( @el, sprintf( $fmt,
+				    $id->($el), "TEXT", "", "" ) );
+		$el[-1] =~ s/\s+$//;
+	    }
+	    else {
+		push( @el, $el . " //?" );
+	    }
+	}
+	return join( "", "CREATE TABLE ",
+		     $id->($table),
+		     "\n",
+		     "  ( ",
+		     join( ",\n    ", @el, @fk ),
+		     " );\n\n" );
+    }
+    elsif ( $sql =~ /^pragma\s+foreign_keys\s*=\s*OFF;/si && $addfk ) {
+	$sql =~ s/OFF/ON/;
+	return $sql."\n";
+    }
+    elsif ( $sql =~ /^pragma\s+foreign_keys\s*=\s*ON;/si && $delfk ) {
+	$sql =~ s/ON/OFF/;
+	return $sql."\n";
+    }
+    elsif ( $sql =~ /^(pragma|begin\s+transaction|commit)/si ) {
+	return $sql."\n";
+    }
+    elsif ( $sql =~ /^(insert|create\s+index|analyze)/si ) {
+	# print( "- ", $_ ) if $debug;
+	return;
+    }
+    elsif ( $sql !~ /\S/ ) {
+	return $sql;
+    }
+    "SKIPPED: $sql";
+}
+
+
 =head1 LICENSE
 
-Copyright (C) 2015, 2016, Johan Vromans,
+Copyright (C) 2015, 2019, Johan Vromans,
 
 This module is free software. You can redistribute it and/or
 modify it under the terms of the Artistic License 2.0.

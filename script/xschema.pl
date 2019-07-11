@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Wed Jul 10 10:25:02 2019
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jul 10 13:54:09 2019
-# Update Count    : 73
+# Last Modified On: Thu Jul 11 13:21:26 2019
+# Update Count    : 92
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -12,18 +12,21 @@
 use strict;
 use warnings;
 
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
 # Package name.
-my $my_package = 'Sciurix';
+my $my_package = 'MSProTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( xschema 0.01 );
+my ($my_name, $my_version) = qw( xschema 0.02 );
 
 ################ Command line parameters ################
 
 use Getopt::Long 2.13;
 
 # Command line options.
-my $dbname;				# database
-my $indent = 4;
+my $dbname;			# database
+my $addfk;			# enable/disable foreign keys
 my $verbose = 0;		# verbose processing
 my $output;			# output file
 
@@ -37,113 +40,40 @@ app_options();
 
 # Post-processing.
 $trace |= ($debug || $test);
+$addfk = defined($addfk) ? $addfk ? 1 : -1 : 0;
 
 ################ Presets ################
 
-$indent = " " x $indent;
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
 ################ The Process ################
 
-my $dbh;
+use MobileSheetsPro::DB;
+
+my $opts = { AddForeignKeys => $addfk };
 
 if ( $dbname ) {
-    require DBI;
-    my $opts = {};
-    $opts->{sqlite_unicode} = 1;
-    $dbh = DBI::->connect( "dbi:SQLite:dbname=$dbname", "", "", $opts );
-    my $dbversion = $dbh->selectrow_array("pragma user_version");
+    db_open( $dbname, { NoVersionCheck => 2 } );
 
-    print fmtsql( "PRAGMA user_version = $dbversion;\n" );
-    my $schema = $dbh->selectall_arrayref( "SELECT tbl_name,sql FROM sqlite_master WHERE type = 'table'" );
+    print format_sql( "PRAGMA user_version = " . dbversion() . ";\n" );
+    my $schema = dbh->selectall_arrayref( "SELECT name,sql FROM sqlite_master WHERE type = 'table'" );
 
-    print fmtsql( "BEGIN TRANSACTION;\n" );
+    print format_sql( "PRAGMA foreign_keys=OFF;\n", $opts );
+    print format_sql( "BEGIN TRANSACTION;\n", $opts );
     foreach ( @$schema ) {
-	print fmtsql($_->[1] . ";\n");
+	print format_sql($_->[1] . ";\n", $opts );
     }
-    print fmtsql( "COMMIT;\n" );
+    print format_sql( "COMMIT;\n", $opts );
 }
 else {
+    my $line = "";
     while ( <> ) {
-	print fmtsql( $_ );
+	$line .= $_ if /\S/;
+	next unless /;$/;
+	print format_sql( $line, $opts );
+	$line = "";
     }
 }
-
-################ Subroutines ################
-
-sub id {
-    my $name = shift;
-    return '"' . $name . '"' if $name =~ /^(key)$/i;
-    $name;
-}
-
-sub fmtsql {
-    my ( $sql ) = @_;
-    my $ret = "";
-    if ( $sql =~ m/ ^
-		    create \s+ table \s* (\S+) \s* \( (.*) \) \s*
-		    ;
-		  /xsi ) {
-	my $table = $1;
-	return if $table eq "sqlite_stat1";
-	my $sql = $2;
-	my @el;
-	foreach my $el ( split( /,/, $sql ) ) {
-	    $el =~ s/^\s+//s;
-	    $el =~ s/\s+$//s;
-	    if ( $el =~ m/ ^
-			   foreign \s+ key \s*
-			   \( (.*?) \) \s*
-			   references \s+ (\S+) \s*
-			   \( (.*?) \)
-			 /xsi ) {
-		push( @el,
-		      sprintf("FOREIGN KEY%-15s REFERENCES %s%s",
-			      "(" . id($1) . ")",
-			      id($2),
-			      "(". id($3) .")" ) );
-	    }
-	    elsif ( $el =~ m/ ^
-			      (\S+) \s+ 
-			      (\S+)
-			      ( \s+ ( primary \s key ) )?
-			      ( \s+ ( default ) \s+ (.*) )?
-			    /ix ) {
-		push( @el,
-		      sprintf( "%-26s %-15s%s%s",
-			       id($1),
-			       uc($2),
-			       defined($3) ? " ".uc($4) : '',
-			       defined($5) ? " ".uc($6)." ".$7 : '',
-			     ) );
-		$el[-1] =~ s/\s+$//;
-	    }
-	    elsif ( $el =~ /^(\w+)$/ ) {
-		push( @el, sprintf( "%-26s TEXT",
-				    id($el) ) );
-	    }
-	    else {
-		push( @el, $el . " //?" );
-	    }
-	}
-	return join( "", "CREATE TABLE ",
-		     id($table),
-		     "\n",
-		     "  ( ",
-		     join( ",\n$indent", @el ),
-		     " );\n\n" );
-    }
-    elsif ( $sql =~ /^(pragma|begin\s+transaction|commit)/si ) {
-	return $sql."\n";
-    }
-    elsif ( $sql =~ /^(insert|create\s+index|analyze)/si ) {
-	# print( "- ", $_ ) if $debug;
-	return;
-    }
-    "SKIPPED: $sql";
-}
-
-exit 0;
 
 ################ Subroutines ################
 
@@ -163,6 +93,7 @@ sub app_options {
     if ( @ARGV > 0 ) {
 	GetOptions('output=s'	=> \$output,
 		   'db=s'	=> \$dbname,
+		   'fk!'	=> \$addfk,
 		   'ident'	=> \$ident,
 		   'verbose'	=> \$verbose,
 		   'trace'	=> \$trace,
@@ -186,13 +117,16 @@ __END__
 
 =head1 NAME
 
-sample - skeleton for GetOpt::Long and Pod::Usage
+xschema - extract schema from (MobileSheetsPro) database
 
 =head1 SYNOPSIS
 
-sample [options] [file ...]
+xschema [options] [file ...]
 
  Options:
+   --db=XXX		uses database XXX
+   --fk			adds foreign keys
+   --no-fk		removes foreign keys
    --ident		shows identification
    --help		shows a brief help message and exits
    --man                shows full documentation and exits
@@ -201,6 +135,20 @@ sample [options] [file ...]
 =head1 OPTIONS
 
 =over 8
+
+=item B<--db=>I<XXX>
+
+Gets information from the named database.
+
+If no database is specified, processes a schema from input.
+
+=item B<--fk>
+
+Adds foreign keys to the database schema.
+
+=item B<--no-fk>
+
+Removes foreign keys from the database schema.
 
 =item B<--help>
 
@@ -220,13 +168,14 @@ Provides more verbose information.
 
 =item I<file>
 
-The input file(s) to process, if any.
+A previously produced schema file will de read if no B<--db> option
+was supplied.
 
 =back
 
 =head1 DESCRIPTION
 
-B<This program> will read the given input file(s) and do someting
-useful with the contents thereof.
+B<This program> will output a neatly and consistently formatted schema
+for the database.
 
 =cut
