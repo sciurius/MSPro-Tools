@@ -30,6 +30,7 @@ my $zipfile;
 my $ann = 1;			# process annotations
 my $check = 0;			# check integrity only
 my $verbose = 1;		# verbose processing
+my $repackable = 0;		# unpack in a format that msb_pack.pl understands
 
 # Development options (not shown with -help).
 my $debug = 0;			# debugging
@@ -52,6 +53,8 @@ my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 ################ The Process ################
 
 use Fcntl qw( SEEK_CUR O_RDONLY O_WRONLY O_CREAT );
+use File::Path qw(make_path);
+use File::Basename qw(dirname);
 use DBI;
 use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
 use Encode;
@@ -118,6 +121,8 @@ my %seen;
 
 while ( !$dbonly && ( my $n = $msb->read(8) ) ) {
 
+    mkdir("media") if $repackable;
+
     if ( $n != $HDR_MAGIC ) {
 	# Add recovery later.
 	die("OOPS -- Missing magic... punting\n");
@@ -172,7 +177,10 @@ while ( !$dbonly && ( my $n = $msb->read(8) ) ) {
 	elsif ( !$check) {
 	    # Make file name and create it.
 	    my $fn = $path;
-	    $path =~ s;^.*/;;;
+	    $path =~ s;^.*/;; unless $repackable;
+	    $path =~ s;^/;; if $repackable;
+	    $path = "media/" . $path if $repackable;
+	    make_path(dirname($path));
 	    $fn = $path if $path;
 	    create_file( $fn, $buf, undef, $mtime );
 	}
@@ -317,9 +325,11 @@ sub handle_preferences {
     my $items = $self->read(4);
     warn("Preferences: $items items\n") if $verbose && !$dbonly;
 
+    mkdir("preferences") if $repackable;
     for my $i ( 0..$items-1 ) {
 	my $len  = $self->read(2);
 	my $path = $self->readstring($len) . ".xml";
+	$path = "preferences/" . sprintf("%02d", $i) . "-" . $path if $repackable;
 	$len = $self->read(8);
 	warn("Pref item: $path ($len)\n") if $verbose > 1;
 	$self->readbuf( \my $data, $len );
@@ -447,6 +457,7 @@ sub app_options {
 		   'dbonly'	=> \$dbonly,
 		   'ident'	=> \$ident,
 		   'verbose+'	=> \$verbose,
+		   'repackable'   => \$repackable,
 		   'quiet'	=> sub { $verbose = 0 },
 		   'trace'	=> \$trace,
 		   'help|?'	=> \$help,
@@ -485,6 +496,7 @@ msb_unpack [options] file
    --man                full documentation
    --verbose		more verbose information
    --quiet		run as quietly as possible
+   --repackable		output compatible with msb_pack
 
 =head1 OPTIONS
 
@@ -529,6 +541,10 @@ Runs as quietly as possible.
 =item I<file>
 
 The MobileSheetsProBackup set to unpack.
+
+=item B<--repackable>
+
+Unpack media files into media/ and preferences into preferences/ so that they can be re-packed by msb_pack.pl
 
 =back
 
