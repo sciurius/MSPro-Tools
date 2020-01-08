@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Tue Jun 11 16:56:23 2019
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jul  6 09:18:03 2019
-# Update Count    : 70
+# Last Modified On: Sun Sep  8 22:46:59 2019
+# Update Count    : 95
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -27,7 +27,8 @@ use Getopt::Long 2.13;
 # Command line options.
 my $dbname = "mobilesheets.db";
 my $verbose = 1;		# verbose processing
-my $mail = 1;
+my $mail;
+my $large;
 my $fix = 0;
 
 # Development options (not shown with -help).
@@ -68,9 +69,13 @@ $sql = "SELECT Id,SongId,Title FROM Songs WHERE Id != SongId";
 $r = dbh->selectall_arrayref($sql);
 foreach ( @$r ) {
     my ( $id, $songid, $title ) = @$_;
-    add_msg( "=== Songs without matching SongIds\n\n" ) unless $did++;
+    add_msg( "=== ", $fix ? "Fixing s" : "S" ,
+	     "ongs without matching SongIds\n\n" ) unless $did++;
     $songid //= "<?>";
     add_msg( sprintf("%5s [%5d: %s]\n", $songid, $id, $title ) );
+}
+if ( $fix ) {
+    dbh->do("UPDATE Songs SET SongId = Id WHERE SongId != Id");
 }
 add_msg("\n") if $did;
 
@@ -106,9 +111,59 @@ $sql =
 $r = dbh->selectall_arrayref($sql);
 foreach ( @$r ) {
     my ( $id, $songid, $fileid, $title ) = @$_;
-    add_msg( "=== ", scalar(@$r), " Stale entries in TextDisplaySettings\n\n" ) unless $did++;
+    add_msg( "=== ", $fix ? "Fixing " : "" ,
+	     scalar(@$r), " Stale entries in TextDisplaySettings\n\n" ) unless $did++;
     add_msg( sprintf("%6d [%5d: %s]\n", $fileid, $songid, $title ) );
     dbh->do( "DELETE FROM TextDisplaySettings WHERE Id = ?", {}, $id ) if $fix;
+}
+add_msg("\n") if $did;
+
+#### Check inconsistent text sizes.
+
+my @tds_large =			# look ma, no hash!
+  ( TitleSize	=> 37,
+    MetaSize	=> 30,
+    ChordsSize	=> 30,
+    LyricsSize	=> 28,
+    TabSize	=> 28,
+    ChorusSize	=> 28,
+  );
+my @tds_small =			# look ma, no hash!
+  ( TitleSize	=> 32,
+    MetaSize	=> 25,
+    ChordsSize	=> 24,
+    LyricsSize	=> 24,
+    TabSize	=> 23,
+    ChorusSize	=> 23,
+  );
+my @tds = @{ $large ? \@tds_large : \@tds_small };
+my %tds = @tds;
+
+$did = 0;
+$sql =
+  "SELECT TextDisplaySettings.Id,Songs.Id,Title,".
+  join(",", grep { ! /\d/ } @tds) . ",LineSpacing".
+  " FROM Songs,TextDisplaySettings".
+  " WHERE Songs.Id = TextDisplaySettings.SongId".
+  "  AND ( ".
+  join(" OR ", map { "$_ <> $tds{$_}" } keys(%tds) ) .
+  " OR LineSpacing < 1.19 OR LineSpacing > 1.21".
+  ")".
+  " ORDER BY Songs.Id";
+$r = dbh->selectall_arrayref($sql);
+foreach ( @$r ) {
+    my ( $id, $songid, $title, @a ) = @$_;
+    add_msg( "=== ", $fix ? "Fixing " : "" ,
+	     scalar(@$r), " Inconsistent entries in TextDisplaySettings\n\n" ) unless $did++;
+    add_msg( sprintf("%6d [%5d: " . ("%2d " x (@a-1)) . "%.2f \"%s\"]\n",
+		     $id, $songid, @a, $title ) );
+    if ( $fix ) {
+	$sql = "UPDATE TextDisplaySettings ".
+	  "SET ".
+	  join(", ", map { "$_ = $tds{$_}" } keys(%tds) ) .
+	  ", LineSpacing=? WHERE Id = ?";
+	dbh->do( $sql, {}, $tds{LineSpacing}, $id );
+    }
 }
 add_msg("\n") if $did;
 
@@ -141,6 +196,8 @@ unused( "Time Signatures",
 	"  AND Id NOT IN".
 	"   ( SELECT SignatureId FROM SignatureSongs )" );
 
+#### Wrap up.
+
 send_msg();
 
 ################ Subroutines ################
@@ -151,7 +208,7 @@ sub unused {
     $r = dbh->selectall_arrayref($sql);
     foreach ( @$r ) {
 	my ( $id, $name ) = @$_;
-	add_msg( "=== ".($fix ? "Fixed u":"U")."nused $tag\n\n" ) unless $did++;
+	add_msg( "=== ".($fix ? "Fixing u":"U")."nused $tag\n\n" ) unless $did++;
 	add_msg( sprintf("%3d: %s\n", $id, $name ) );
     }
     add_msg("\n") if $did;
@@ -184,7 +241,7 @@ sub send_msg {
 			      Hello => 'Ikke')
       or die "SMTP Connection Failed\n";
     my $sender = 'MSPro Watcher <nobody@squirrel.nl>';
-    my $recipient = 'Johan Vromans <jvromans@squirrel.nl>';
+    my $recipient = $mail;
 
     # sender's address here
     $smtp->mail($sender);
@@ -271,7 +328,8 @@ sub app_options {
     if ( @ARGV > 0 ) {
 	GetOptions('ident'	=> \$ident,
 		   'db=s'	=> \$dbname,
-		   'mail!'	=> \$mail,
+		   'large'	=> \$large,
+		   'mail=s'	=> \$mail,
 		   'fix'	=> \$fix,
 		   'verbose'	=> sub { $verbose++ },
 		   'quiet'	=> sub { $verbose = 0 },
@@ -305,7 +363,7 @@ flatten [options]
  Options:
    --db=XXX		the MSPro database (default mobilesheets.db)
    --fix		try fixing some inconsistencies
-   --[no]mail           send a report
+   --mail=XXX           send a report to XXX
    --quiet              run quietly
    --ident		show identification
    --help		brief help message
@@ -325,10 +383,9 @@ Default is C<"mobilesheets.db">.
 
 Try to fix some of the inconsistencies.
 
-=item B<--mail> B<--no-mail>
+=item B<--mail=>I<addr>
 
-Send a report via email. Or not.
-On by default.
+Send a report via email.
 
 Try to fix some of the inconsistencies.
 
@@ -352,17 +409,10 @@ More verbose information.
 
 =head1 DESCRIPTION
 
-PDF documents are created for each file that has annotations. For
-PDF sources the original document is included, so the new PDF
-document contains the original plus the annotations. For other
-source files, the PDF document will contain empty pages containing
-the annotations.
+Checks the MobileSheetsPro database for inconsistent song settings,
+are reports this.
 
-Currently supported annotations:
-
-- drawing annotations (line, rectangle, circle, free)
-
-- text annotations, but no fancy font stuff
+Optionally fixes (some).
 
 =head1 DISCLAIMER
 
