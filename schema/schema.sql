@@ -1,4 +1,4 @@
-PRAGMA user_version = 54;
+PRAGMA user_version = 55;
 
 PRAGMA foreign_keys=OFF;
 
@@ -401,7 +401,8 @@ CREATE TABLE TextDisplaySettings
     TransposeKey               INTEGER        DEFAULT 0,
     TabSize                    INTEGER        DEFAULT 28,
     ChorusSize                 INTEGER        DEFAULT 28,
-    RTL                        INTEGER        DEFAULT 0 );
+    RTL                        INTEGER        DEFAULT 0,
+    UseSharps                  INTEGER        DEFAULT 0 );
 
 CREATE TABLE SongNotes
   ( Id                         INTEGER        PRIMARY KEY,
