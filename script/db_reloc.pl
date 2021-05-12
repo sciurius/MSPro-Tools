@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Tue Mar 15 07:50:53 2016
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Mar 15 17:34:05 2016
-# Update Count    : 24
+# Last Modified On: Wed May 12 19:36:17 2021
+# Update Count    : 25
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -52,6 +52,8 @@ my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
 use DBI;
 use Encode;
+
+die("$dbfile: $!\n") unless -s $dbfile;
 
 my $dbh = DBI::->connect( "dbi:SQLite:dbname=$dbfile", "", "",
 			  { sqlite_unicode => 1,
