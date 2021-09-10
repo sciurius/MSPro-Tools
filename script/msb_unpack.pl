@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Nov 27 15:50:10 2018
-# Update Count    : 288
+# Last Modified On: Fri Sep 10 09:51:28 2021
+# Update Count    : 302
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -30,7 +30,7 @@ my $zipfile;
 my $ann = 1;			# process annotations
 my $check = 0;			# check integrity only
 my $verbose = 1;		# verbose processing
-my $repackable = 0;		# unpack in a format that msb_pack.pl understands
+my $repackable = 1;		# unpack in a format that msb_pack.pl understands
 
 # Development options (not shown with -help).
 my $debug = 0;			# debugging
@@ -110,6 +110,12 @@ if ( $msb->version >= 4 ) {
 
 if ( $msb->version >= 5 ) {
     $msb->handle_user_filters;
+}
+
+if ( $msb->version >= 6 ) {
+    $msb->handle_annotations_favorites();
+    $msb->handle_stamplists();
+    $msb->handle_custom_stamps();
 }
 
 # First entry in the file is the database.
@@ -244,6 +250,9 @@ sub open {
     elsif ( $magic == $FILE_MAGIC+2 ) {
 	$self->{version} = 5;
     }
+    elsif ( $magic == $FILE_MAGIC+3 ) {
+	$self->{version} = 6;
+    }
     die("Not a valid MSPro backup file (wrong version?)\n")
       unless $self->{version};
 
@@ -299,7 +308,7 @@ sub handle_user_filters {
     my ( $self ) = @_;
     my $path = "user_filters.xml";
     my $len = $self->read(8);
-    warn("Item: $path ($len)\n") if $verbose > 1;
+    warn("Item: $path ($len bytes)\n") if $verbose > 1;
     $self->readbuf( \my $data, $len );
     warn("item: ", substr($data, 0, 20), "...\n") if $debug;
 
@@ -331,7 +340,7 @@ sub handle_preferences {
 	my $path = $self->readstring($len) . ".xml";
 	$path = "preferences/" . sprintf("%02d", $i) . "-" . $path if $repackable;
 	$len = $self->read(8);
-	warn("Pref item: $path ($len)\n") if $verbose > 1;
+	warn("Pref item: $path ($len bytes)\n") if $verbose > 1;
 	$self->readbuf( \my $data, $len );
 	warn("item: ", substr($data, 0, 20), "...\n") if $debug;
 
@@ -345,6 +354,84 @@ sub handle_preferences {
 		 or $data =~ /^.*\n\<map\>(?:.|\n)*\<\/map\>\s*$/ ) {
 	    warn("Pref item: $path -- Missing <map> content\n");
 	}
+	next if $dbonly;
+
+	if ( $self->zip ) {
+	    # Store into zip.
+	    warn("AddString: $path\n") if $verbose > 1;
+	    my $m = $self->zip->addString( $data, $path, COMPRESSION_STORED );
+	}
+	elsif ( !$check ) {
+	    ::create_file( $path, $data, $len );
+	}
+    }
+}
+
+sub handle_annotations_favorites {
+    my ( $self ) = @_;
+    my $path = "annotations_favorites.xml";
+    my $len = $self->read(8);
+    warn("Item: $path ($len bytes)\n") if $verbose > 1;
+    $self->readbuf( \my $data, $len );
+    warn("item: ", substr($data, 0, 20), "...\n") if $debug;
+
+    # Verify <?xml ...> header.
+    unless ( $data =~ /^\<\?xml\b.*\>/ ) {
+	warn("Pref item: $path -- Missing <?xml> header\n");
+    }
+
+    next if $dbonly;
+
+    if ( $self->zip ) {
+	# Store into zip.
+	warn("AddString: $path\n") if $verbose > 1;
+	my $m = $self->zip->addString( $data, $path, COMPRESSION_STORED );
+    }
+    elsif ( !$check ) {
+	::create_file( $path, $data, $len );
+    }
+}
+
+sub handle_stamplists {
+    my ( $self ) = @_;
+    my $path = "stamplists.json";
+    my $len = $self->read(8);
+    warn("Item: $path ($len bytes)\n") if $verbose > 1;
+    $self->readbuf( \my $data, $len );
+    warn("item: ", substr($data, 0, 20), "...\n") if $debug;
+
+
+    # Verify JSON (like).
+    unless ( $data =~ /^\{.*\}$/s ) {
+	warn("Stamplists: $path -- Not JSON?\n");
+    }
+    next if $dbonly;
+
+    if ( $self->zip ) {
+	# Store into zip.
+	warn("AddString: $path\n") if $verbose > 1;
+	my $m = $self->zip->addString( $data, $path, COMPRESSION_STORED );
+    }
+    elsif ( !$check ) {
+	::create_file( $path, $data, $len );
+    }
+}
+
+sub handle_custom_stamps {
+    my ( $self ) = @_;
+    my $items = $self->read(4);
+    warn("Custom stamps: $items items\n") if $verbose && !$dbonly;
+
+    mkdir("custom_stamps") if $repackable;
+    for my $i ( 0..$items-1 ) {
+	my $len  = $self->read(2);
+	my $path = $self->readstring($len);
+	$path = "custom_stamps/" . sprintf("%02d", $i) . "-" . $path if $repackable;
+	$len = $self->read(8);
+	warn("Custom item: $path ($len bytes)\n") if $verbose > 1;
+	$self->readbuf( \my $data, $len );
+	warn("item: ", substr($data, 0, 20), "...\n") if $debug;
+
 	next if $dbonly;
 
 	if ( $self->zip ) {
@@ -457,7 +544,7 @@ sub app_options {
 		   'dbonly'	=> \$dbonly,
 		   'ident'	=> \$ident,
 		   'verbose+'	=> \$verbose,
-		   'repackable'   => \$repackable,
+		   'repackable!'   => \$repackable,
 		   'quiet'	=> sub { $verbose = 0 },
 		   'trace'	=> \$trace,
 		   'help|?'	=> \$help,
@@ -496,7 +583,7 @@ msb_unpack [options] file
    --man                full documentation
    --verbose		more verbose information
    --quiet		run as quietly as possible
-   --repackable		output compatible with msb_pack
+   --[no]repackable	output compatible with msb_pack
 
 =head1 OPTIONS
 

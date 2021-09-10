@@ -85,14 +85,17 @@ use Encode;
 #
 # Note: Everything is byte aligned.
 
-my $FILE_MAGIC   = 1234567892;
+my $FILE_MAGIC   = 1234567895;		# version 6
 my $HDR_MAGIC    = 1287706427353294236;
 my $EOF_SENTINEL = "\xff" x 8;
 
 my $msb = MSB->new->create($newmsbfile);
 
 $msb->write_preferences;
-$msb->write_file("user_filters.xml");
+$msb->write_data("user_filters.xml");
+$msb->write_data("annotations_favorites.xml");
+$msb->write_data("stamplists.json");
+$msb->write_custom_stamps();
 $msb->write_file("mobilesheets.db");
 
 $msb->open_db("mobilesheets.db");
@@ -116,7 +119,7 @@ foreach my $row (@db_files) {
         $msb->write($SongId, 8);
     }
     $lastSongId = $SongId;
-    
+ 
     unless ($written_paths{$Path}) {
         $msb->write_file("media/" . $Path)
     } else {
@@ -161,7 +164,7 @@ sub create {
       or die("$fn: $!\n");
     $self->{ofd} = $fd;
 
-    $self->write( $FILE_MAGIC+2, 4 );
+    $self->write( $FILE_MAGIC, 4 );
     $self;
 }
 
@@ -226,10 +229,9 @@ sub version { $_[0]->{version} }
 
 sub write_preferences {
     my ( $self ) = @_;
-    
     my $dir = 'preferences';
     opendir my $dh, $dir  or die "Can't open $dir: $!";
-    my @xml_files = sort grep { /.xml/ } readdir($dh);
+    my @xml_files = sort grep { /.xml$/ } readdir($dh);
     my $items = @xml_files;
 
     warn("Preferences: $items items\n") if $verbose > 1;
@@ -241,7 +243,40 @@ sub write_preferences {
         $name =~s/^[0-9]*-(.*).xml/$1/;
         $self->write(length($name), 2);
         $self->writestring($name, length($name));
-        $self->write_file("preferences/" . $item);
+        $self->write_file("$dir/$item");
+    }
+}
+
+sub write_data {
+    my ( $self, $item ) = @_;
+    warn("Processing file $item");
+    my $name = $item;
+#    $self->write(length($name), 2);
+#    $self->writestring($name, length($name));
+    $self->write_file($item);
+}
+
+sub write_custom_stamps {
+    my ( $self ) = @_;
+    my $dir = 'custom_stamps';
+    opendir my $dh, $dir  or do {
+	warn "No custom stamps (Can't open $dir: $!)\n";
+	$self->write( 0, 4 );
+	return;
+    };
+    my @files = sort grep { /^\d+-.*$/ } readdir($dh);
+    my $items = @files;
+
+    warn("Custom stamps: $items items\n") if $verbose > 1;
+
+    $self->write($items, 4);
+    foreach my $item (@files) {
+        warn("Processing custom stamp $item");
+        my $name = $item;
+        $name =~s/^[0-9]*-//;
+        $self->write(length($name), 2);
+        $self->writestring($name, length($name));
+        $self->write_file("$dir/$item");
     }
 }
 

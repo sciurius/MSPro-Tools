@@ -1,4 +1,4 @@
-PRAGMA user_version = 55;
+PRAGMA user_version = 58;
 
 PRAGMA foreign_keys=OFF;
 
@@ -100,7 +100,8 @@ CREATE TABLE Files
     LastModified               INTEGER,
     Source                     INTEGER,
     Type                       INTEGER,
-    Password                   VARCHAR(255)   DEFAULT '' );
+    Password                   VARCHAR(255)   DEFAULT '',
+    SourceFilePageCount        INTEGER        DEFAULT 0 );
 
 CREATE TABLE Books
   ( Id                         INTEGER        PRIMARY KEY,
@@ -322,55 +323,8 @@ CREATE TABLE Links
     ZoomYStart                 FLOAT,
     ZoomXEnd                   FLOAT,
     ZoomYEnd                   FLOAT,
-    Radius                     INTEGER );
-
-CREATE TABLE AnnotationsBase
-  ( Id                         INTEGER        PRIMARY KEY,
-    SongId                     INTEGER,
-    Page                       INTEGER,
-    Type                       INTEGER,
-    GroupNum                   INTEGER,
-    Alpha                      INTEGER,
-    Zoom                       FLOAT,
-    ZoomY                      FLOAT,
-    Version                    INTEGER );
-
-CREATE TABLE DrawAnnotations
-  ( Id                         INTEGER        PRIMARY KEY,
-    BaseId                     INTEGER,
-    LineColor                  INTEGER,
-    FillColor                  INTEGER,
-    LineWidth                  INTEGER,
-    DrawMode                   INTEGER,
-    PenMode                    INTEGER,
-    SmoothMode                 INTEGER );
-
-CREATE TABLE StampAnnotations
-  ( Id                         INTEGER        PRIMARY KEY,
-    BaseId                     INTEGER,
-    StampIndex                 INTEGER,
-    CustomSymbol               VARCHAR(255),
-    StampSize                  INTEGER );
-
-CREATE TABLE TextboxAnnotations
-  ( Id                         INTEGER        PRIMARY KEY,
-    BaseId                     INTEGER,
-    TextColor                  INTEGER,
-    Text                       VARCHAR(255),
-    FontFamily                 INTEGER,
-    FontSize                   INTEGER,
-    FontStyle                  INTEGER,
-    FillColor                  INTEGER,
-    BorderColor                INTEGER,
-    TextAlign                  INTEGER,
-    HasBorder                  INTEGER,
-    BorderWidth                INTEGER,
-    AutoSize                   INTEGER,
-    Density                    FLOAT );
-
-CREATE TABLE ExtraBitmaps
-  ( Id                         INTEGER        PRIMARY KEY,
-    Path                       VARCHAR(255) );
+    Radius                     INTEGER,
+    Version                    INTEGER        DEFAULT 0 );
 
 CREATE TABLE TextDisplaySettings
   ( Id                         INTEGER        PRIMARY KEY,
@@ -474,7 +428,8 @@ CREATE TABLE SmartButtons
     ZoomX                      FLOAT,
     ZoomY                      FLOAT,
     File                       VARCHAR(255)   DEFAULT '',
-    Size                       INTEGER        DEFAULT 1 );
+    Size                       INTEGER        DEFAULT 1,
+    Version                    INTEGER        DEFAULT 0 );
 
 CREATE TABLE SmartButtonMIDI
   ( Id                         INTEGER        PRIMARY KEY,
@@ -523,6 +478,69 @@ CREATE TABLE MidiActionSysex
   ( Id                         INTEGER        PRIMARY KEY,
     MidiId                     INTEGER,
     SysexBytes                 BLOB );
+
+CREATE TABLE Layers
+  ( Id                         INTEGER        PRIMARY KEY,
+    SongId                     INTEGER,
+    Page                       INTEGER,
+    LayerIndex                 INTEGER,
+    Name                       INTEGER,
+    Visible                    INTEGER );
+
+CREATE TABLE CustomStamps
+  ( Id                         INTEGER        PRIMARY KEY,
+    Name                       VARCHAR(255),
+    Path                       VARCHAR(255),
+    Position                   INTEGER );
+
+CREATE TABLE StampAnnotations
+  ( Id                         INTEGER        PRIMARY KEY,
+    BaseId                     INTEGER,
+    Type                       INTEGER,
+    Size                       FLOAT,
+    FilePath                   VARCHAR(255),
+    Color                      INTEGER,
+    Font                       INTEGER,
+    Symbol                     VARCHAR(255) );
+
+CREATE TABLE DrawAnnotations
+  ( Id                         INTEGER        PRIMARY KEY,
+    BaseId                     INTEGER,
+    LineColor                  INTEGER,
+    FillColor                  INTEGER,
+    LineWidth                  FLOAT,
+    DrawMode                   INTEGER,
+    PenMode                    INTEGER,
+    SmoothMode                 INTEGER );
+
+CREATE TABLE TextboxAnnotations
+  ( Id                         INTEGER        PRIMARY KEY,
+    BaseId                     INTEGER,
+    TextColor                  INTEGER,
+    Text                       VARCHAR(255),
+    FontFamily                 INTEGER,
+    FontSize                   FLOAT,
+    FontStyle                  INTEGER,
+    FillColor                  INTEGER,
+    BorderColor                INTEGER,
+    TextAlign                  INTEGER,
+    HasBorder                  INTEGER,
+    BorderWidth                INTEGER,
+    AutoSize                   INTEGER,
+    LineSpacing                FLOAT          DEFAULT 1 );
+
+CREATE TABLE AnnotationsBase
+  ( Id                         INTEGER        PRIMARY KEY,
+    SongId                     INTEGER,
+    Page                       INTEGER,
+    Type                       INTEGER,
+    Opacity                    INTEGER,
+    Zoom                       FLOAT,
+    ZoomY                      FLOAT,
+    Version                    INTEGER,
+    SourcePageWidth            FLOAT,
+    SourcePageHeight           FLOAT,
+    Layer                      INTEGER );
 
 COMMIT;
 
