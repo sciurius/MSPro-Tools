@@ -5,8 +5,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri May  1 18:39:01 2015
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Sep 10 09:51:28 2021
-# Update Count    : 302
+# Last Modified On: Sat Sep 11 21:03:15 2021
+# Update Count    : 315
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -45,6 +45,8 @@ $msbfile = shift if @ARGV == 1;
 $trace ||= ($debug || $test);
 $verbose ||= $trace;
 $verbose = 9 if $debug;
+
+$repackable = 0 if $check;
 
 ################ Presets ################
 
@@ -143,12 +145,12 @@ while ( !$dbonly && ( my $n = $msb->read(8) ) ) {
 	    warn("Song $songid, not included\n") if $verbose > 1;
 	    last;
 	}
+	$mtime = int( $mtime/1000 );
 	warn( "Song $songid, path = $path, size = $sz, mtime = $mtime (" .
 	      localtime($mtime) . ")\n" )
 	  if $verbose > 1;
-	next if $sz == 0;
+	#next if $sz == 0;
 
-	$mtime = int( $mtime/1000 );
 	my $len = $msb->read(8);
 	if ( !$len ) {
 	    # Placeholder for files not physically present in the backup set.
@@ -317,7 +319,7 @@ sub handle_user_filters {
 	warn("Pref item: $path -- Missing <?xml> header\n");
     }
 
-    next if $dbonly;
+    return if $dbonly;
 
     if ( $self->zip ) {
 	# Store into zip.
@@ -354,6 +356,13 @@ sub handle_preferences {
 		 or $data =~ /^.*\n\<map\>(?:.|\n)*\<\/map\>\s*$/ ) {
 	    warn("Pref item: $path -- Missing <map> content\n");
 	}
+
+	if ( $path =~ /(^|\/)\d+-default\.xml$/ ) {
+	    if ( $data =~ /<string name="version">(.+?)<\/string>/ ) {
+		warn("MobileSheetsPro version $1\n");
+	    }
+	}
+
 	next if $dbonly;
 
 	if ( $self->zip ) {
@@ -372,6 +381,7 @@ sub handle_annotations_favorites {
     my $path = "annotations_favorites.xml";
     my $len = $self->read(8);
     warn("Item: $path ($len bytes)\n") if $verbose > 1;
+    return unless $len;
     $self->readbuf( \my $data, $len );
     warn("item: ", substr($data, 0, 20), "...\n") if $debug;
 
@@ -397,12 +407,14 @@ sub handle_stamplists {
     my $path = "stamplists.json";
     my $len = $self->read(8);
     warn("Item: $path ($len bytes)\n") if $verbose > 1;
+    return unless $len;
+
     $self->readbuf( \my $data, $len );
     warn("item: ", substr($data, 0, 20), "...\n") if $debug;
 
 
     # Verify JSON (like).
-    unless ( $data =~ /^\{.*\}$/s ) {
+    unless ( $data =~ /^\{.*\}[\n\r]+$/s ) {
 	warn("Stamplists: $path -- Not JSON?\n");
     }
     next if $dbonly;

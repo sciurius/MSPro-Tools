@@ -20,6 +20,7 @@ use Getopt::Long 2.13;
 
 # Command line options.
 my $newmsbfile = "MobileSheetsProBackup_repacked.msb";
+my $dir;
 my $dbonly = 0;
 my $ann = 1;			# process annotations
 my $check = 0;			# check integrity only
@@ -89,7 +90,16 @@ my $FILE_MAGIC   = 1234567895;		# version 6
 my $HDR_MAGIC    = 1287706427353294236;
 my $EOF_SENTINEL = "\xff" x 8;
 
+$dir ||= ".";
+$dir .= "/" unless $dir =~ m;/$;;
+$dir = "" if $dir eq "./";
+
+die("Missing ${dir}mobilesheets.db ... is here a backup set?\n")
+  unless -s "${dir}mobilesheets.db";
+
 my $msb = MSB->new->create($newmsbfile);
+
+chdir($dir) if $dir;
 
 $msb->write_preferences;
 $msb->write_data("user_filters.xml");
@@ -172,17 +182,17 @@ sub write {
     my ( $self, $value, $len ) = @_;
     my $buf;
     if ( $len == 8 ) {
-    $buf = eval { pack( "Q>", $value ) } || "\0\0\0\0".pack("N", $value);
+	$buf = eval { pack( "Q>", $value ) } // "\0\0\0\0".pack("N", $value);
     }
     elsif ( $len == 4 ) {
-    $buf = pack( "N", $value );
+	$buf = pack( "N", $value );
     }
     elsif ( $len == 2 ) {
-    $buf = pack( "n", $value );
+	$buf = pack( "n", $value );
     }
     my $n = syswrite( $self->{ofd}, $buf, $len );
     if ( $n != $len ) {
-    warn("write error: $n bytes instead of $len\n");
+	warn("write error: $n bytes instead of $len\n");
     }
     return $n;
 }
@@ -191,7 +201,7 @@ sub writestring {
     my ( $self, $string, $len ) = @_;
     my $n = syswrite( $self->{ofd}, $string, $len );
     if ( $n != $len ) {
-    warn("write error: $n bytes instead of $len\n");
+	warn("write error: $n bytes instead of $len\n");
     }
     return $n;
 }
@@ -199,7 +209,8 @@ sub writestring {
 sub write_file {
     my ( $self, $dbfile) = @_;
     my $len = -s $dbfile;
-    $self->write( $len, 8 );
+    $self->write( $len // 0, 8 );
+    return unless $len;
     sysopen( my $fi, $dbfile, O_RDONLY )
       or die("$dbfile: $!\n");
     my $buf = "";
@@ -238,7 +249,7 @@ sub write_preferences {
 
     $self->write($items, 4);
     foreach my $item (@xml_files) {
-        warn("Processing pref $item");
+        warn("Processing pref $item\n");
         my $name = $item;
         $name =~s/^[0-9]*-(.*).xml/$1/;
         $self->write(length($name), 2);
@@ -249,7 +260,7 @@ sub write_preferences {
 
 sub write_data {
     my ( $self, $item ) = @_;
-    warn("Processing file $item");
+    warn("Processing file $item\n");
     my $name = $item;
 #    $self->write(length($name), 2);
 #    $self->writestring($name, length($name));
@@ -271,7 +282,7 @@ sub write_custom_stamps {
 
     $self->write($items, 4);
     foreach my $item (@files) {
-        warn("Processing custom stamp $item");
+        warn("Processing custom stamp $item\n");
         my $name = $item;
         $name =~s/^[0-9]*-//;
         $self->write(length($name), 2);
@@ -345,6 +356,7 @@ sub app_options {
     if ( @ARGV > 0 ) {
 	GetOptions('verify|check'	=> \$check,
 		   'dbonly'	=> \$dbonly,
+		   'dir=s'	=> \$dir,
 		   'ident'	=> \$ident,
 		   'verbose+'	=> \$verbose,
 		   'quiet'	=> sub { $verbose = 0 },
