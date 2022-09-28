@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Mon Nov  5 18:39:01 2018
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Apr 27 14:06:37 2022
-# Update Count    : 109
+# Last Modified On: Tue Sep 27 20:45:57 2022
+# Update Count    : 123
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -153,16 +153,20 @@ sub outlines {
 		if ( exists($ol->{S})
 		     && ( $ol->{S} eq "/GoTo" || $ol->{S}->val eq "GoTo" ) ) {
 		    warn("using GoTo\n") if $debug;
-		    $dst = destpage($ol->{D}->val);
-		    warn("Page ", $ol->{D}->val, " => $dst\n") if $trace;
+		    my $v = $ol->{D}->val;
+		    if ( ref($v) eq 'ARRAY' && ref($v->[0]) eq 'PDF::API2::Page' ) {
+			$dst = $_pages->{"".($v->[0])};
+		    }
+		    else {
+			# Named destination.
+			$dst = destpage($v);
+			warn("Page ", $v, " => $dst\n") if $trace;
+		    }
 		}
 		else {
 		    warn("using D\n") if $debug;
 		    $dst = $ol->{D}->val;
 		}
-	    }
-	    if ( ref($dst) eq 'ARRAY' ) {
-		$dst = $dst->[0];
 	    }
 	    warn("dest = $dst\n") if $debug;
 
@@ -203,7 +207,8 @@ sub pdfstring {
 sub destpage {
     my ( $target ) = @_;
 
-    my $tree = $pdf->{catalog}->{Names}->val->{Dests}->val;
+    my $tree = eval { $pdf->{catalog}->{Names}->val->{Dests}->val };
+    warn( "No page tree found", "\n" ), return unless $tree;
 
     my $page = _search( $tree, $target );
     warn( $page ? "Page $page" : "Not found", "\n" ) if $trace;
@@ -272,17 +277,16 @@ sub app_options {
 		    'help|?'	=> \$help,
 		    'man'	=> \$man,
 		    'debug'	=> \$debug )
-	  or $pod2usage->(2);
+	  or $pod2usage->( -exitval => 2, -verbose => 0 );
     }
     if ( $ident or $help or $man ) {
 	print STDERR ("This is $my_package [$my_name $my_version]\n");
     }
     if ( $man or $help ) {
-	$pod2usage->(1) if $help;
-	$pod2usage->(VERBOSE => 2) if $man;
+	$pod2usage->( -exitval => 0, -verbose => $man ? 2 : 0 );
     }
     if ( @ARGV != 1 ) {
-	$pod2usage->(1);
+	$pod2usage->( -exitval => 3, -verbose => 0 );
     }
 }
 
