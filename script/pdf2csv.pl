@@ -2,9 +2,9 @@
 
 # Author          : Johan Vromans
 # Created On      : Mon Nov  5 18:39:01 2018
-# Last Modified By: Johan Vromans
-# Last Modified On: Tue Sep 27 20:45:57 2022
-# Update Count    : 123
+# Last Modified By: 
+# Last Modified On: Fri Dec 16 11:41:54 2022
+# Update Count    : 169
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -16,7 +16,7 @@ use utf8;
 # Package name.
 my $my_package = 'MSPTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( pdf2csv 0.02 );
+my ($my_name, $my_version) = qw( pdf2csv 0.03 );
 
 ################ Command line parameters ################
 
@@ -24,6 +24,7 @@ use Getopt::Long 2.13;
 
 # Command line options.
 my $csvfile;
+my @tags;
 my %tags;
 my $overlap;
 my $verbose = 1;		# verbose processing
@@ -47,8 +48,6 @@ my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
 use PDF::API2 2.042;
 
-my @tags = qw( title pages );
-
 my @t = ( time );		# for speed stats
 
 # Open.
@@ -64,38 +63,45 @@ binmode( STDOUT, ':utf8' );
 binmode( STDERR, ':utf8' );
 
 my $ol = outlines($pdf);
+die("No outline?\n") unless $ol;
 
-if ( @$ol ) {
-    my $sfx = "";
-    print( "title;pages;");
-    foreach ( sort keys %tags ) {
-	print( "$_;" );
-	$sfx .= $tags{$_} . ";";
-    }
-    print( "\n");
+print( "title;pages;");
+foreach ( @tags ) {
+    print( "$_;" );
+}
+print( "\n");
 
-    if ( $overlap ) {
-	my @items = sort { $a->[0] cmp $b->[0] } @$ol;
-	for ( my $i = 0; $i < @items-1; $i++ ) {
-	    print( $items[$i][0], ';',
-		   $items[$i][1], '-', $pdf->page_count,
-		   ";$sfx\n" );
-	}
-    }
-    else {
-	my @items = sort { $a->[1] <=> $b->[1] } @$ol;
-	push( @items, $items[-1] );
-	for ( my $i = 0; $i < @items-1; $i++ ) {
-	    print( $items[$i][0], ';',
-		   $items[$i+1][1]-1 > $items[$i][1]
-		   ? ( $items[$i][1], '-', $items[$i+1][1]-1 )
-		   : ( $items[$i][1] ),
-		   ";$sfx\n" );
-	}
-    }
+my @items;
+if ( $overlap ) {
+    @items = sort { $a->[1] cmp $b->[1] } @$ol; # ????
 }
 else {
-    warn("No outline?\n");
+    @items = sort { $a->[1] <=> $b->[1] } @$ol;
+}
+push( @items, $items[-1] );
+
+for ( my $i = 0; $i < @items-1; $i++ ) {
+
+    my %v = ( title     => $items[$i][0],
+	      startpage => $items[$i][1]-1,
+	      endpage   => $items[$i+1][1]-1,
+	      pagecount => $pdf->page_count );
+
+    my $ep =  $overlap ? $v{pagecount} : $v{endpage};
+    $v{pages} = $ep > $v{startpage}
+      ? join( "-", $v{startpage}, $ep )
+      : $v{startpage};
+
+    my %n;
+    for my $t ( @tags ) {
+	$n{$t} = $tags{$t};
+	$n{$t} =~ s;\%\{(.+?)\};$v{$1};ge;
+    }
+    $v{$_} = $n{$_} for keys %n;
+
+    print( join( ";",
+		 map { $v{$_} } qw( title pages ), @tags ),
+	   ";\n" );
 }
 
 warn( "Open: ",     $t[1]-$t[0], "s, ",
@@ -257,6 +263,7 @@ sub app_options {
     my $help = 0;		# handled locally
     my $ident = 0;		# handled locally
     my $man = 0;		# handled locally
+    my @t;
 
     my $pod2usage = sub {
         # Load Pod::Usage only if needed.
@@ -268,7 +275,7 @@ sub app_options {
     # Process options.
     if ( @ARGV > 0 ) {
 	GetOptions( 'csvfile=s' => \$csvfile,
-		    'extra|x=s'	=> \%tags,
+		    'extra|x=s'	=> \@t,
 		    'overlap'	=> \$overlap,
 		    'ident'	=> \$ident,
 		    'verbose+'	=> \$verbose,
@@ -278,6 +285,12 @@ sub app_options {
 		    'man'	=> \$man,
 		    'debug'	=> \$debug )
 	  or $pod2usage->( -exitval => 2, -verbose => 0 );
+    }
+    for ( @t ) {
+	$pod2usage->( -exitval => 2, -verbose => 0 )
+	  unless /^(\w+)=(.*)/;
+	$tags{$1} = $2;
+	push( @tags, $1 );
     }
     if ( $ident or $help or $man ) {
 	print STDERR ("This is $my_package [$my_name $my_version]\n");
@@ -305,7 +318,7 @@ pdf2csv [options] file
  Options:
    --csvfile=XXX	CSV file to output, default is standard output
    --overlap		overlapping pages
-   --extra|x KEY=VALUE  additional (fixed) fields in the CSV
+   --extra|x KEY=VALUE  additional fields in the CSV
    --ident		shows identification
    --help		shows a brief help message and exits
    --man                shows full documentation and exits
@@ -330,7 +343,11 @@ end page.
 
 =item B<--extra> B<-x> KEY=VAL
 
-Add additional fixed-valued fields to the CSV.
+Add additional fields with value I<VAL> to the CSV.
+
+I<VAL> may contain substitution strings in the form C<%{XXX}>, where
+I<XXX> can be one of C<startpage>, C<endpage>, C<pages> (the page range) and
+C<pagecount> (the number of pages in the PDF.
 
 This may be repeated.
 
