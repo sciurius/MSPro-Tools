@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Mon Nov  5 18:39:01 2018
 # Last Modified By: 
-# Last Modified On: Fri Dec 16 11:41:54 2022
-# Update Count    : 169
+# Last Modified On: Thu Dec 22 08:46:43 2022
+# Update Count    : 208
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -16,7 +16,7 @@ use utf8;
 # Package name.
 my $my_package = 'MSPTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( pdf2csv 0.03 );
+my ($my_name, $my_version) = qw( pdf2csv 0.04 );
 
 ################ Command line parameters ################
 
@@ -83,7 +83,7 @@ push( @items, $items[-1] );
 for ( my $i = 0; $i < @items-1; $i++ ) {
 
     my %v = ( title     => $items[$i][0],
-	      startpage => $items[$i][1]-1,
+	      startpage => $items[$i][1],
 	      endpage   => $items[$i+1][1]-1,
 	      pagecount => $pdf->page_count );
 
@@ -110,7 +110,7 @@ warn( "Open: ",     $t[1]-$t[0], "s, ",
 
 ################ Subroutines ################
 
-use Encode qw(decode);
+use Encode qw(decode :fallbacks);
 
 my $_pages;
 sub outlines {
@@ -135,9 +135,12 @@ sub outlines {
 	while ( $this ) {
 
 	    if ( $this->has_children ) {
+		# This prevents a crash Can't locate object method "has_children"
+		$this->_load_children;
 		warn( "Children[$lvl](",
 		      pdfstring( $this->title ),
-		      "): ", $this->count, "\n") if $trace;
+		      "): ", $this->count,
+		      "\n") if $trace;
 		$p->( $this->first, $lvl+1 );
 		$this = $this->next;
 		next;
@@ -186,28 +189,49 @@ sub outlines {
     return $res;
 }
 
+my $pdfdocencoding_support;
+
 sub pdfstring {
     my ( $str ) = @_;
 
+    # Default encoding is PDFDocEncoding. Need Encode::PDFCodc module.
+    my $enc = 'PDFDoc';
+    my $check = FB_DEFAULT;
+
     # Handle BOM, if present.
-    my $enc = 'UTF-8';
-    if ( $str =~ /^\xef\xbb\xbf(.*)/ ) { # ï»¿
-	# Ok.
+    if ( $str =~ /^\xef\xbb\xbf(.*)/s ) { # ï»¿
+	$enc = 'UTF-8'; $str = $1;
     }
-    elsif ( $str =~ /^\xfe\xff(.*)/ ) { # þÿ
-	$enc = 'UTF-16BE';
+    elsif ( $str =~ /^\xfe\xff(.*)/s ) { # þÿ
+	$enc = 'UTF-16BE'; $str = $1;
     }
-    elsif ( $str =~ /^\xff\xfe(.*)/ ) { # ÿþ
-	$enc = 'UTF-16LE';
+    elsif ( $str =~ /^\xff\xfe(.*)/s ) { # ÿþ
+	$enc = 'UTF-16LE'; $str = $1;
     }
-    elsif ( $str =~ /^\xff\xfe\x00\x00(.*)/ ) { # ÿþ\0\0
-	$enc = 'UTF-32LE';
+    elsif ( $str =~ /^\xff\xfe\x00\x00(.*)/s ) { # ÿþ\0\0
+	$enc = 'UTF-32LE'; $str = $1;
     }
-    elsif ( $str =~ /^\x00\x00\xfe\xff(.*)/ ) { # \0\0þÿ
-	$enc = 'UTF-32BE';
+    elsif ( $str =~ /^\x00\x00\xfe\xff(.*)/s ) { # \0\0þÿ
+	$enc = 'UTF-32BE'; $str = $1;
+    }
+    elsif ( $str =~ /^[[:ascii:]]*\Z/ ) {
+	$enc = 'ASCII';
     }
 
-    return decode( $enc, $str );
+    if ( $enc eq 'PDFDoc' ) {
+	unless ( defined $pdfdocencoding_support ) {
+	    $pdfdocencoding_support = 0;
+	    eval { require Encode::PDFDoc;
+		   $pdfdocencoding_support = 1;
+	       }
+	      or
+	      warn("Warning: No support for PDFDocEncoding.\n",
+		   "Some characters may yield surprising results.\n");
+	}
+	$enc = 'ASCII' unless $pdfdocencoding_support;
+    }
+
+    return decode( $enc, $str, $check );
 }
 
 sub destpage {
@@ -383,5 +407,12 @@ The input PDF document.
 B<This program> will read the outline of the given PDF document
 and tries to create a CSV file with pages info, suitable for
 importing in tools like MobileSheetsPro.
+
+=head1 REQUIREMENTS
+
+You need a fairly recent version of L<PDF::API2>.
+
+Some PDF documents use a PDF-specific encoding for outlines. You need
+to install L<Encode::PDFDoc> to support this.
 
 =cut
