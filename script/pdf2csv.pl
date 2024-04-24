@@ -3,8 +3,8 @@
 # Author          : Johan Vromans
 # Created On      : Mon Nov  5 18:39:01 2018
 # Last Modified By: 
-# Last Modified On: Thu Dec 22 08:46:43 2022
-# Update Count    : 208
+# Last Modified On: Wed Apr 24 17:19:09 2024
+# Update Count    : 216
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -16,7 +16,7 @@ use utf8;
 # Package name.
 my $my_package = 'MSPTools';
 # Program name and version.
-my ($my_name, $my_version) = qw( pdf2csv 0.04 );
+my ($my_name, $my_version) = qw( pdf2csv 0.05 );
 
 ################ Command line parameters ################
 
@@ -156,7 +156,7 @@ sub outlines {
 		$dst = $ol->{Dest}->val;
 		$dst = $_pages->{"".$dst} // $_pages->{"".($dst->[0])};
 	    }
-	    else {
+	    elsif ( exists( $ol->{A} ) ) {
 		warn("using A\n") if $debug;
 		$ol = $ol->{A}->val;
 		if ( exists($ol->{S})
@@ -172,14 +172,22 @@ sub outlines {
 			warn("Page ", $v, " => $dst\n") if $trace;
 		    }
 		}
-		else {
+		elsif ( exists $ol->{D} ) {
 		    warn("using D\n") if $debug;
 		    $dst = $ol->{D}->val;
 		}
+		else {
+		    $dst = "<undef>";
+		    warn("No dest for \"$title\"\n");
+		}
+	    }
+	    else {
+		$dst = "<undef>";
+		warn("No dest for \"$title\"\n");
 	    }
 	    warn("dest = $dst\n") if $debug;
 
-	    push( @$res, [ $title, $dst ] );
+	    push( @$res, [ $title, $dst ] ) unless $dst eq "<undef>";
 	    $this = $this->next;
 	}
     };
@@ -226,7 +234,8 @@ sub pdfstring {
 	       }
 	      or
 	      warn("Warning: No support for PDFDocEncoding.\n",
-		   "Some characters may yield surprising results.\n");
+		   "Some characters may yield surprising results.\n",
+		   "Please install Encode::PDFDoc.\n" );
 	}
 	$enc = 'ASCII' unless $pdfdocencoding_support;
     }
